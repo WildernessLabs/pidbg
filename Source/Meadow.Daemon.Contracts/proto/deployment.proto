@@ -1,0 +1,141 @@
+syntax = "proto3";
+
+package meadow.daemon.v1;
+
+option csharp_namespace = "Meadow.Daemon.Contracts.V1";
+
+// ─── Deployment Slot ─────────────────────────────────────────────────────────
+
+// PRODUCTION: versioned, symlink-based, supports SetActiveVersion (rollback).
+// DEBUG:      single directory, always overwritten, no version history.
+enum DeploymentSlot {
+  DEPLOYMENT_SLOT_UNSPECIFIED = 0;
+  PRODUCTION                  = 1;
+  DEBUG                       = 2;
+}
+
+// ─── File Transfer ───────────────────────────────────────────────────────────
+
+message FileEntry {
+  string relative_path = 1;
+  int64  size_bytes    = 2;
+  string sha256        = 3;
+}
+
+message DeploymentManifest {
+  string app_name                    = 1;
+  string version                     = 2; // label e.g. "000004" or "debug"
+  DeploymentSlot slot                = 3;
+  string entry_point                 = 4; // "MyApp.dll"
+  string startup_args                = 5;
+  map<string, string> environment    = 6;
+  repeated FileEntry files           = 7;
+  int64 deployed_at_ms               = 8;
+}
+
+// ─── Begin Deployment ────────────────────────────────────────────────────────
+
+message BeginDeploymentRequest {
+  string app_name              = 1;
+  DeploymentSlot slot          = 2;
+  repeated FileEntry files     = 3; // expected files for pre-allocation info
+}
+
+message BeginDeploymentResponse {
+  string deployment_id  = 1; // correlation token
+  string staging_path   = 2; // absolute path on Pi (for diagnostics)
+  string version_label  = 3; // "000004" or "debug"
+}
+
+// ─── Commit Deployment ───────────────────────────────────────────────────────
+
+message CommitDeploymentRequest {
+  string deployment_id      = 1;
+  string app_name           = 2;
+  DeploymentSlot slot       = 3;
+  DeploymentManifest manifest = 4;
+}
+
+message CommitDeploymentResponse {
+  bool   success        = 1;
+  string error_message  = 2;
+  string version_label  = 3;
+}
+
+// ─── Abort Deployment ────────────────────────────────────────────────────────
+
+message AbortDeploymentRequest {
+  string deployment_id = 1;
+  string app_name      = 2;
+}
+
+message AbortDeploymentResponse {
+  bool success = 1;
+}
+
+// ─── List Deployments ────────────────────────────────────────────────────────
+
+message ListDeploymentsRequest {
+  string app_name = 1;
+}
+
+message DeploymentRecord {
+  string app_name      = 1;
+  string version_label = 2;
+  bool   is_active     = 3;
+  DeploymentSlot slot  = 4;
+  int64  deployed_at_ms = 5;
+  int64  size_bytes    = 6;
+}
+
+message ListDeploymentsResponse {
+  repeated DeploymentRecord deployments = 1;
+}
+
+// ─── Get Current Manifest ────────────────────────────────────────────────────
+
+message GetCurrentManifestRequest {
+  string         app_name = 1;
+  DeploymentSlot slot     = 2;
+}
+
+message GetCurrentManifestResponse {
+  bool               found    = 1;
+  DeploymentManifest manifest = 2;
+}
+
+// ─── Set Active Version (Rollback) ───────────────────────────────────────────
+
+message SetActiveVersionRequest {
+  string app_name      = 1;
+  string version_label = 2;
+  bool   auto_restart  = 3; // if true, restart app after symlink swap
+}
+
+message SetActiveVersionResponse {
+  bool   success       = 1;
+  string error_message = 2;
+}
+
+// ─── Delete Version ──────────────────────────────────────────────────────────
+
+message DeleteVersionRequest {
+  string app_name      = 1;
+  string version_label = 2;
+}
+
+message DeleteVersionResponse {
+  bool   success       = 1;
+  string error_message = 2;
+}
+
+// ─── Prune Deployments ───────────────────────────────────────────────────────
+
+message PruneDeploymentsRequest {
+  string app_name   = 1;
+  int32  keep_count = 2; // 0 = use daemon default (DeploymentRetentionCount)
+}
+
+message PruneDeploymentsResponse {
+  int32 deleted_count = 1;
+}

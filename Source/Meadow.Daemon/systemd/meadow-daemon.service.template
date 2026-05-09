@@ -1,0 +1,39 @@
+# Meadow Daemon — OTA and Remote Debug Service
+# Template processed by install.sh: @@PLACEHOLDERS@@ are replaced at install time.
+# Installed to: ~/.config/systemd/user/meadow-daemon.service
+# Enabled with: systemctl --user enable meadow-daemon
+# Started with: systemctl --user start meadow-daemon
+
+[Unit]
+Description=Meadow Daemon — OTA and Remote Debug Service
+Documentation=https://github.com/WildernessLabs/pidbg
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+NotifyAccess=main
+
+ExecStart=@@DAEMON_BIN@@ @@EXTRA_ARGS@@
+WorkingDirectory=@@INSTALL_DIR@@
+
+# Restart on failure; do not restart on explicit `systemctl stop` (clean exit 0)
+Restart=on-failure
+RestartSec=3s
+StartLimitBurst=5
+StartLimitIntervalSec=60s
+
+# Structured JSON logs → systemd journal
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=meadow-daemon
+
+# .NET runtime settings
+Environment=DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+Environment=DOTNET_USE_POLLING_FILE_WATCHER=false
+
+# Config override path (system-level)
+Environment=MEADOW_CONFIGDIR=/etc/meadow
+
+[Install]
+WantedBy=default.target

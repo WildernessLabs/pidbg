@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net10.0;netstandard2.1</TargetFrameworks>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Meadow.Daemon.Contracts</RootNamespace>
+    <AssemblyName>Meadow.Daemon.Contracts</AssemblyName>
+    <Description>gRPC contracts (proto + generated stubs) for Meadow.Daemon v1</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf" Version="3.*" />
+    <PackageReference Include="Grpc.Tools" Version="2.*" PrivateAssets="All" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Server stubs: included in daemon; client stubs: included in VSIX and client lib -->
+    <Protobuf Include="proto\common.proto"         GrpcServices="Both" />
+    <Protobuf Include="proto\deployment.proto"     GrpcServices="Both" />
+    <Protobuf Include="proto\process.proto"        GrpcServices="Both" />
+    <Protobuf Include="proto\session.proto"        GrpcServices="Both" />
+    <Protobuf Include="proto\meadow_daemon.proto"  GrpcServices="Both" />
+  </ItemGroup>
+
+</Project>

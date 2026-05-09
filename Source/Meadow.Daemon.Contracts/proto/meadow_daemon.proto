@@ -1,0 +1,129 @@
+syntax = "proto3";
+
+package meadow.daemon.v1;
+
+option csharp_namespace = "Meadow.Daemon.Contracts.V1";
+
+import "common.proto";
+import "deployment.proto";
+import "process.proto";
+import "session.proto";
+
+// ─── Self-Update ─────────────────────────────────────────────────────────────
+
+message PrepareUpdateRequest {
+  string new_version = 1;
+  string sha256      = 2;
+  int64  size_bytes  = 3;
+}
+
+message PrepareUpdateResponse {
+  bool   ready        = 1;
+  string upload_path  = 2; // absolute path to upload new binary via SFTP
+  string error_message = 3;
+}
+
+message ApplyUpdateRequest {}
+
+message ApplyUpdateResponse {
+  bool   success       = 1;
+  string error_message = 2;
+}
+
+// ─── Device Info ─────────────────────────────────────────────────────────────
+
+message GetDeviceInfoRequest {}
+
+// ─── Unified Service ─────────────────────────────────────────────────────────
+
+// MeadowDaemonService is the single gRPC service exposed on 127.0.0.1:50051.
+// All access from the VSIX goes through this service via an SSH-tunneled channel.
+service MeadowDaemonService {
+
+  // ── Diagnostics ────────────────────────────────────────────────────────────
+
+  rpc Ping(PingRequest) returns (PongResponse);
+
+  rpc GetHealth(PingRequest) returns (HealthStatus);
+
+  // Server-side streaming: emits a HealthStatus every ~30s until client disconnects
+  rpc StreamHealth(PingRequest) returns (stream HealthStatus);
+
+  // Server-side streaming: emits LogEvents filtered by minimum level
+  rpc StreamLogs(StreamLogsRequest) returns (stream LogEvent);
+
+  rpc GetDeviceInfo(GetDeviceInfoRequest) returns (DeviceInfo);
+
+  rpc GetDaemonVersion(PingRequest) returns (DaemonVersion);
+
+  // ── Process Lifecycle ──────────────────────────────────────────────────────
+
+  rpc StartApplication(StartApplicationRequest) returns (StartApplicationResponse);
+
+  rpc StopApplication(StopApplicationRequest) returns (StopApplicationResponse);
+
+  rpc RestartApplication(RestartApplicationRequest) returns (RestartApplicationResponse);
+
+  rpc GetApplicationStatus(GetApplicationStatusRequest)
+      returns (GetApplicationStatusResponse);
+
+  rpc ListProcesses(ListProcessesRequest) returns (ListProcessesResponse);
+
+  // Server-side streaming: emits OutputLines until app exits or client disconnects
+  rpc StreamOutput(StreamOutputRequest) returns (stream OutputLine);
+
+  // ── Deployment ─────────────────────────────────────────────────────────────
+
+  // Step 1: allocate staging area, get version label
+  rpc BeginDeployment(BeginDeploymentRequest) returns (BeginDeploymentResponse);
+
+  // Step 2: client uploads files via SFTP to stagingPath (no RPC for chunks)
+
+  // Step 3: verify, commit, update symlink/state
+  rpc CommitDeployment(CommitDeploymentRequest) returns (CommitDeploymentResponse);
+
+  // Cancel: clean up staging dir
+  rpc AbortDeployment(AbortDeploymentRequest) returns (AbortDeploymentResponse);
+
+  rpc ListDeployments(ListDeploymentsRequest) returns (ListDeploymentsResponse);
+
+  rpc GetCurrentManifest(GetCurrentManifestRequest)
+      returns (GetCurrentManifestResponse);
+
+  // Update active symlink — used for rollback in production slot
+  rpc SetActiveVersion(SetActiveVersionRequest) returns (SetActiveVersionResponse);
+
+  rpc DeleteVersion(DeleteVersionRequest) returns (DeleteVersionResponse);
+
+  rpc PruneDeployments(PruneDeploymentsRequest) returns (PruneDeploymentsResponse);
+
+  // ── vsdbg Management ───────────────────────────────────────────────────────
+
+  rpc GetVsdbgInfo(GetVsdbgInfoRequest) returns (GetVsdbgInfoResponse);
+
+  // Download vsdbg from Microsoft CDN (requires internet on Pi)
+  rpc InstallVsdbg(InstallVsdbgRequest) returns (InstallVsdbgResponse);
+
+  // Install vsdbg from pre-uploaded tarball (air-gapped devices)
+  rpc UploadVsdbgTarball(UploadVsdbgTarballRequest)
+      returns (UploadVsdbgTarballResponse);
+
+  // ── Debug Sessions ─────────────────────────────────────────────────────────
+
+  rpc StartDebugSession(StartDebugSessionRequest)
+      returns (StartDebugSessionResponse);
+
+  rpc StopDebugSession(StopDebugSessionRequest) returns (StopDebugSessionResponse);
+
+  rpc GetSessionStatus(GetSessionStatusRequest) returns (GetSessionStatusResponse);
+
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+
+  // ── Self-Update ────────────────────────────────────────────────────────────
+
+  // Phase 1: prepare slot for new binary upload
+  rpc PrepareUpdate(PrepareUpdateRequest) returns (PrepareUpdateResponse);
+
+  // Phase 2: verify, swap binary, exit (systemd restarts new version)
+  rpc ApplyUpdate(ApplyUpdateRequest) returns (ApplyUpdateResponse);
+}

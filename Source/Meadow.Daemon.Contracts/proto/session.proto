@@ -1,0 +1,119 @@
+syntax = "proto3";
+
+package meadow.daemon.v1;
+
+option csharp_namespace = "Meadow.Daemon.Contracts.V1";
+
+// ─── Session Mode ─────────────────────────────────────────────────────────────
+
+enum SessionMode {
+  SESSION_MODE_UNSPECIFIED = 0;
+  LAUNCH                   = 1; // vsdbg starts the app
+  ATTACH                   = 2; // vsdbg attaches to running app pid
+}
+
+// ─── Session State ────────────────────────────────────────────────────────────
+
+enum SessionState {
+  SESSION_STATE_UNSPECIFIED = 0;
+  STARTING                  = 1;
+  ACTIVE                    = 2;
+  STOPPING                  = 3;
+  ENDED                     = 4;
+}
+
+// ─── Session Status ──────────────────────────────────────────────────────────
+
+message SessionStatus {
+  string       session_id      = 1;
+  string       app_name        = 2;
+  SessionMode  mode            = 3;
+  SessionState state           = 4;
+  int32        vsdbg_pid       = 5;
+  int32        vsdbg_port      = 6;
+  int32        app_pid         = 7;  // 0 if launched by vsdbg (not pre-existing)
+  int64        started_at_ms   = 8;
+  string       correlation_id  = 9;  // matches VSIX session correlation ID
+  int64        last_activity_ms = 10;
+}
+
+// ─── vsdbg Install ────────────────────────────────────────────────────────────
+
+message GetVsdbgInfoRequest {}
+
+message GetVsdbgInfoResponse {
+  bool   installed    = 1;
+  string version      = 2;
+  string install_path = 3;
+}
+
+message InstallVsdbgRequest {
+  string version = 1; // e.g. "latest" or "17.12.0"
+}
+
+message InstallVsdbgResponse {
+  bool   success       = 1;
+  string version       = 2; // installed version
+  string error_message = 3;
+}
+
+// For air-gapped devices: upload tarball via SFTP first, then call this
+message UploadVsdbgTarballRequest {
+  string version      = 1;
+  string tarball_path = 2; // absolute path on Pi where tarball was SFTP'd
+  string sha256       = 3;
+}
+
+message UploadVsdbgTarballResponse {
+  bool   success       = 1;
+  string error_message = 2;
+}
+
+// ─── Start Debug Session ─────────────────────────────────────────────────────
+
+message StartDebugSessionRequest {
+  string      app_name          = 1;
+  SessionMode mode              = 2;
+  string      required_version  = 3; // vsdbg version; empty = use installed
+  bool        force             = 4; // kill existing session for this app if present
+  string      correlation_id    = 5; // 8-char hex from VSIX
+}
+
+message StartDebugSessionResponse {
+  bool   success       = 1;
+  string session_id    = 2;
+  int32  vsdbg_pid     = 3;
+  int32  vsdbg_port    = 4;
+  string error_message = 5;
+}
+
+// ─── Stop Debug Session ──────────────────────────────────────────────────────
+
+message StopDebugSessionRequest {
+  string session_id           = 1;
+  bool   resume_meadow_daemon = 2; // restart production app after stop
+}
+
+message StopDebugSessionResponse {
+  bool   success       = 1;
+  string error_message = 2;
+}
+
+// ─── Get Session Status ──────────────────────────────────────────────────────
+
+message GetSessionStatusRequest {
+  string session_id = 1;
+}
+
+message GetSessionStatusResponse {
+  bool          found  = 1;
+  SessionStatus status = 2;
+}
+
+// ─── List Sessions ────────────────────────────────────────────────────────────
+
+message ListSessionsRequest {}
+
+message ListSessionsResponse {
+  repeated SessionStatus sessions = 1;
+}
