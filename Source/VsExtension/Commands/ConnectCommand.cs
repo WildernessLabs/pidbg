@@ -1,0 +1,34 @@
+using Microsoft.VisualStudio.Shell;
+using PiDbg.Infrastructure;
+using System.ComponentModel.Design;
+
+namespace PiDbg.Commands;
+
+// "Pi Debugger → Connect" menu command.
+// Implemented in Phase 7 (P7.3).
+internal sealed class ConnectCommand
+{
+    private readonly AsyncPackage _package;
+    private readonly SshConnectionManager _ssh;
+
+    private ConnectCommand(AsyncPackage package, SshConnectionManager ssh)
+    {
+        _package = package;
+        _ssh = ssh;
+    }
+
+    public static async Task InitializeAsync(AsyncPackage package)
+    {
+        await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(package.DisposalToken);
+        var commandService = await package.GetServiceAsync(typeof(IMenuCommandService))
+            as IMenuCommandService
+            ?? throw new InvalidOperationException("IMenuCommandService unavailable");
+
+        var cmdId = new CommandID(PackageGuids.CommandSet, CommandIds.Connect);
+        var cmd = new OleMenuCommand(Execute, cmdId);
+        commandService.AddCommand(cmd);
+    }
+
+    private static void Execute(object sender, EventArgs e)
+        => throw new NotImplementedException("Implemented in Phase 7");
+}

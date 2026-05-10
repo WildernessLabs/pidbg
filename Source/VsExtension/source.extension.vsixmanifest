@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PackageManifest Version="2.0.0"
+    xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011"
+    xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
+  <Metadata>
+    <Identity
+      Id="PiDbg.Extension.6b4c9e01-5f2a-4d7b-9e8f-3a7b1c2d4e5f"
+      Version="1.0"
+      Language="en-US"
+      Publisher="Wilderness Labs" />
+    <DisplayName>Pi Debugger (PiDbg)</DisplayName>
+    <Description>Remote .NET debugging for Raspberry Pi ARM64 devices from Visual Studio.</Description>
+    <MoreInfo>https://github.com/WildernessLabs/pidbg</MoreInfo>
+    <License>LICENSE</License>
+    <Tags>raspberry pi, remote debug, arm64, .NET, IoT</Tags>
+  </Metadata>
+  <Installation>
+    <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.0,)" />
+    <InstallationTarget Id="Microsoft.VisualStudio.Professional" Version="[17.0,)" />
+    <InstallationTarget Id="Microsoft.VisualStudio.Enterprise" Version="[17.0,)" />
+  </Installation>
+  <Dependencies>
+    <Dependency Id="Microsoft.Framework.NDP"
+      DisplayName=".NET Framework"
+      d:Source="Auto"
+      Version="[4.7.2,)" />
+  </Dependencies>
+  <Assets>
+    <Asset Type="Microsoft.VisualStudio.VsPackage"
+      d:Source="Project"
+      d:ProjectName="%CurrentProject%"
+      Path="|%CurrentProject%;PkgdefProjectOutputGroup|" />
+    <Asset Type="Microsoft.VisualStudio.MefComponent"
+      d:Source="Project"
+      d:ProjectName="%CurrentProject%"
+      Path="|%CurrentProject%|" />
+  </Assets>
+</PackageManifest>

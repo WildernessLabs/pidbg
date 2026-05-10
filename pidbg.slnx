@@ -1,5 +1,11 @@
 <Solution>
-  <Project Path="Source\Meadow.Daemon\Meadow.Daemon.csproj" />
-  <Project Path="Source\Meadow.Daemon.Contracts\Meadow.Daemon.Contracts.csproj" />
-  <Project Path="Source\VsExtension\PiDbg.Vsix.csproj" />
+  <Folder Name="/Source/">
+    <Project Path="Source\Meadow.Daemon.Contracts\Meadow.Daemon.Contracts.csproj" />
+    <Project Path="Source\Meadow.Daemon\Meadow.Daemon.csproj" />
+    <Project Path="Source\VsExtension\PiDbg.Vsix.csproj" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="Tests\Meadow.Daemon.Tests\Meadow.Daemon.Tests.csproj" />
+    <Project Path="Tests\VsExtension.Tests\VsExtension.Tests.csproj" />
+  </Folder>
 </Solution>

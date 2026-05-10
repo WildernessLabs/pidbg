@@ -10,6 +10,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Configuration
     .AddJsonFile("appsettings.json", optional: false)
+    .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
     .AddJsonFile("/etc/meadow/daemon.conf", optional: true)
     .AddEnvironmentVariables("MEADOW_");
 
@@ -23,16 +24,14 @@ builder.Services.AddSingleton(daemonOpts);
 
 builder.WebHost.ConfigureKestrel(kestrel =>
 {
-    // gRPC — HTTP/2 only
     kestrel.Listen(IPAddress.Loopback, daemonOpts.GrpcPort, o =>
         o.Protocols = HttpProtocols.Http2);
 
-    // REST compat — HTTP/1.1
     kestrel.Listen(IPAddress.Loopback, daemonOpts.RestPort, o =>
         o.Protocols = HttpProtocols.Http1);
 });
 
-// ── systemd integration ───────────────────────────────────────────────────────
+// ── systemd ───────────────────────────────────────────────────────────────────
 
 builder.Host.UseSystemd();
 
@@ -53,20 +52,27 @@ builder.Services
     .AddGrpc()
     .AddServiceOptions<MeadowDaemonGrpcService>(opts =>
     {
-        opts.MaxReceiveMessageSize = 64 * 1024 * 1024; // 64 MB (for file chunk streaming)
+        opts.MaxReceiveMessageSize = 64 * 1024 * 1024;
         opts.MaxSendMessageSize    = 64 * 1024 * 1024;
     });
 
 builder.Services.AddGrpcHealthChecks();
-builder.Services.AddControllers(); // REST compat
+builder.Services.AddControllers();
 
-// Domain services
+// Infrastructure
+builder.Services.AddSingleton<LogEventChannel>();
 builder.Services.AddSingleton<StateStore>();
+
+// Deployment pipeline (Phase 3)
 builder.Services.AddSingleton<VersionStore>();
 builder.Services.AddSingleton<StagingController>();
 builder.Services.AddSingleton<ManifestVerifier>();
 builder.Services.AddSingleton<DeploymentManager>();
+
+// Process management (Phase 5)
 builder.Services.AddSingleton<ProcessManager>();
+
+// vsdbg management (Phase 5)
 builder.Services.AddSingleton<VsdbgInstaller>();
 builder.Services.AddSingleton<VsdbgManager>();
 builder.Services.AddSingleton<VsdbgLauncher>();
@@ -76,9 +82,6 @@ builder.Services.AddSingleton<DebugSessionManager>();
 builder.Services.AddHostedService<ProcessMonitorService>();
 builder.Services.AddHostedService<HealthReporterService>();
 builder.Services.AddHostedService<OtaUpdateService>();
-
-// gRPC log channel (shared between logger provider and StreamLogs handler)
-builder.Services.AddSingleton<LogEventChannel>();
 
 // ── Build ─────────────────────────────────────────────────────────────────────
 

@@ -1,0 +1,20 @@
+namespace Meadow.Daemon.Services;
+
+// Launches vsdbg in --server mode and polls /proc/net/tcp6 for LISTEN state.
+// Implemented in Phase 5 (P5.6).
+internal sealed class VsdbgLauncher
+{
+    private readonly VsdbgManager _vsdbgManager;
+    private readonly DaemonOptions _opts;
+    private readonly ILogger<VsdbgLauncher> _log;
+
+    public VsdbgLauncher(
+        VsdbgManager vsdbgManager,
+        DaemonOptions opts,
+        ILogger<VsdbgLauncher> log)
+    {
+        _vsdbgManager = vsdbgManager;
+        _opts = opts;
+        _log = log;
+    }
+}

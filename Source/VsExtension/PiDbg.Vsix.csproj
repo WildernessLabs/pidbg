@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <OutputType>Library</OutputType>
+    <RootNamespace>PiDbg</RootNamespace>
+    <AssemblyName>PiDbg.Vsix</AssemblyName>
+
+    <!-- VSIX packaging -->
+    <GeneratePkgDefFile>true</GeneratePkgDefFile>
+    <IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
+    <IncludeDebugSymbolsInVSIXContainer>true</IncludeDebugSymbolsInVSIXContainer>
+    <CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
+
+    <!-- VS SDK warnings in generated code; relax for this project only -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Meadow.Daemon.Contracts\Meadow.Daemon.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- VS SDK -->
+    <PackageReference Include="Microsoft.VSSDK.BuildTools" PrivateAssets="All" />
+    <PackageReference Include="Microsoft.VisualStudio.Shell.15.0" />
+    <PackageReference Include="Microsoft.VisualStudio.Interop" />
+    <PackageReference Include="Microsoft.VisualStudio.ImageCatalog" />
+    <PackageReference Include="Microsoft.VisualStudio.ProjectSystem" />
+
+    <!-- SSH / gRPC -->
+    <PackageReference Include="SSH.NET" />
+    <PackageReference Include="Grpc.Net.Client" />
+    <PackageReference Include="Google.Protobuf" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="source.extension.vsixmanifest">
+      <SubType>Designer</SubType>
+    </None>
+  </ItemGroup>
+
+</Project>

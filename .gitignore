@@ -1,1 +1,33 @@
 .claude
+
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+TestResults/
+*.nupkg
+*.snupkg
+*.binlog
+
+## NuGet
+packages/
+
+## Publish output
+publish/
+out/
+
+## Rider / JetBrains
+.idea/
+
+## VS Code
+.vscode/
+
+## OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+## Logs
+*.log

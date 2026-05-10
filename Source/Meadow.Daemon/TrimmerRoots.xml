@@ -1,0 +1,11 @@
+<linker>
+  <!-- Preserve gRPC reflection types so trimming doesn't remove them -->
+  <assembly fullname="Grpc.AspNetCore.Server" preserve="all" />
+  <assembly fullname="Google.Protobuf" preserve="all" />
+  <assembly fullname="Meadow.Daemon.Contracts" preserve="all" />
+
+  <!-- Preserve JSON source-generated context -->
+  <assembly fullname="meadow-daemon">
+    <type fullname="Meadow.Daemon.Models.DaemonJsonContext" preserve="all" />
+  </assembly>
+</linker>
