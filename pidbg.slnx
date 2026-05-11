@@ -2,6 +2,7 @@
   <Folder Name="/Solution Items/">
     <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />
+    <File Path="LICENSE" />
   </Folder>
   <Folder Name="/Source/">
     <Project Path="Source\Meadow.Daemon.Contracts\Meadow.Daemon.Contracts.csproj" />

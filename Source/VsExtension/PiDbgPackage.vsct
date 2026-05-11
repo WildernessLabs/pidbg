@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CommandTable xmlns="http://schemas.microsoft.com/VisualStudio/2005-10-18/CommandTable"
+              xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <Extern href="stdidcmd.h"/>
+  <Extern href="vsshlids.h"/>
+
+  <Commands package="guidPiDbgPackage">
+
+    <Groups>
+      <!-- Anchor group in Tools menu; contains our Pi Debugger submenu -->
+      <Group guid="guidPiDbgCmdSet" id="grpPiDbgInTools" priority="0x0600">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_MENU_TOOLS"/>
+      </Group>
+      <!-- Group inside the Pi Debugger submenu -->
+      <Group guid="guidPiDbgCmdSet" id="grpPiDbgCommands" priority="0x0000">
+        <Parent guid="guidPiDbgCmdSet" id="mnuPiDbg"/>
+      </Group>
+    </Groups>
+
+    <Menus>
+      <Menu guid="guidPiDbgCmdSet" id="mnuPiDbg" priority="0x0100" type="Menu">
+        <Parent guid="guidPiDbgCmdSet" id="grpPiDbgInTools"/>
+        <Strings>
+          <ButtonText>Pi Debugger</ButtonText>
+          <CommandName>Pi Debugger</CommandName>
+        </Strings>
+      </Menu>
+    </Menus>
+
+    <Buttons>
+      <Button guid="guidPiDbgCmdSet" id="cmdConnect" priority="0x0100" type="Button">
+        <Parent guid="guidPiDbgCmdSet" id="grpPiDbgCommands"/>
+        <Strings>
+          <ButtonText>Connect to Pi...</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidPiDbgCmdSet" id="cmdDisconnect" priority="0x0200" type="Button">
+        <Parent guid="guidPiDbgCmdSet" id="grpPiDbgCommands"/>
+        <Strings>
+          <ButtonText>Disconnect</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidPiDbgCmdSet" id="cmdShowLogs" priority="0x0300" type="Button">
+        <Parent guid="guidPiDbgCmdSet" id="grpPiDbgCommands"/>
+        <Strings>
+          <ButtonText>Show Pi Logs</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidPiDbgCmdSet" id="cmdExportDiagnostics" priority="0x0400" type="Button">
+        <Parent guid="guidPiDbgCmdSet" id="grpPiDbgCommands"/>
+        <Strings>
+          <ButtonText>Export Diagnostics...</ButtonText>
+        </Strings>
+      </Button>
+    </Buttons>
+
+  </Commands>
+
+  <Symbols>
+    <GuidSymbol name="guidPiDbgPackage" value="{6B4C9E01-5F2A-4D7B-9E8F-3A7B1C2D4E5F}" />
+    <GuidSymbol name="guidPiDbgCmdSet"  value="{2F8A1C3D-4E5B-6C7D-8E9F-0A1B2C3D4E5F}">
+      <IDSymbol name="grpPiDbgInTools"      value="0x1000" />
+      <IDSymbol name="grpPiDbgCommands"     value="0x1001" />
+      <IDSymbol name="mnuPiDbg"             value="0x1100" />
+      <IDSymbol name="cmdConnect"           value="0x0100" />
+      <IDSymbol name="cmdDisconnect"        value="0x0101" />
+      <IDSymbol name="cmdShowLogs"          value="0x0102" />
+      <IDSymbol name="cmdExportDiagnostics" value="0x0103" />
+    </GuidSymbol>
+  </Symbols>
+
+</CommandTable>

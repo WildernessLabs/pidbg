@@ -7,6 +7,7 @@
     <AssemblyName>PiDbg.Vsix</AssemblyName>
 
     <!-- VSIX packaging -->
+    <VSSDKBuildToolsAutoSetup>true</VSSDKBuildToolsAutoSetup>
     <GeneratePkgDefFile>true</GeneratePkgDefFile>
     <IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
     <IncludeDebugSymbolsInVSIXContainer>true</IncludeDebugSymbolsInVSIXContainer>
@@ -16,6 +17,10 @@
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectCapability Include="CreateVsixContainer" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Meadow.Daemon.Contracts\Meadow.Daemon.Contracts.csproj" />
@@ -32,9 +37,15 @@
 
     <!-- SSH / gRPC -->
     <PackageReference Include="SSH.NET" />
-    <PackageReference Include="Grpc.Net.Client" />
+    <PackageReference Include="Grpc.Core" />
     <PackageReference Include="Google.Protobuf" />
     <PackageReference Include="System.Security.Cryptography.Xml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <VSCTCompile Include="PiDbgPackage.vsct">
+      <ResourceName>Menus.ctmenu</ResourceName>
+    </VSCTCompile>
   </ItemGroup>
 
   <ItemGroup>

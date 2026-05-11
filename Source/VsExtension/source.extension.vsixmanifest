@@ -11,20 +11,24 @@
     <DisplayName>Pi Debugger (PiDbg)</DisplayName>
     <Description>Remote .NET debugging for Raspberry Pi ARM64 devices from Visual Studio.</Description>
     <MoreInfo>https://github.com/WildernessLabs/pidbg</MoreInfo>
-    <License>LICENSE</License>
     <Tags>raspberry pi, remote debug, arm64, .NET, IoT</Tags>
   </Metadata>
   <Installation>
-    <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.0,)" />
-    <InstallationTarget Id="Microsoft.VisualStudio.Professional" Version="[17.0,)" />
-    <InstallationTarget Id="Microsoft.VisualStudio.Enterprise" Version="[17.0,)" />
+    <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.0,)">
+      <ProductArchitecture>amd64</ProductArchitecture>
+    </InstallationTarget>
+    <InstallationTarget Id="Microsoft.VisualStudio.Professional" Version="[17.0,)">
+      <ProductArchitecture>amd64</ProductArchitecture>
+    </InstallationTarget>
+    <InstallationTarget Id="Microsoft.VisualStudio.Enterprise" Version="[17.0,)">
+      <ProductArchitecture>amd64</ProductArchitecture>
+    </InstallationTarget>
   </Installation>
-  <Dependencies>
-    <Dependency Id="Microsoft.Framework.NDP"
-      DisplayName=".NET Framework"
-      d:Source="Auto"
-      Version="[4.7.2,)" />
-  </Dependencies>
+  <Prerequisites>
+    <Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor"
+                  Version="[17.0,)"
+                  DisplayName="Visual Studio core editor" />
+  </Prerequisites>
   <Assets>
     <Asset Type="Microsoft.VisualStudio.VsPackage"
       d:Source="Project"
