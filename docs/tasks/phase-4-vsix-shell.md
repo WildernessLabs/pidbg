@@ -125,12 +125,12 @@ that define the extension identity, its VS version requirements, and the NuGet p
   all embedded resources
 
 **Definition of done**:
-- [ ] `.csproj` uses VS SDK VSIX project type targeting `net10.0-windows`
-- [ ] `source.extension.vsixmanifest` present with correct identity and installation targets
-- [ ] SSH.NET, Grpc.Net.Client, Google.Protobuf referenced
-- [ ] `Meadow.Daemon.Contracts` project reference included
-- [ ] Embedded resources: `detect.sh`, `setup-meadow.sh`, service template
-- [ ] `dotnet build` produces a `.vsix` file
+- [x] `.csproj` targets `net472` (VSIX constraint; VS SDK VSIX project type not used)
+- [x] `source.extension.vsixmanifest` present with correct identity and installation targets
+- [x] SSH.NET, Grpc.Core (net472 C-core), Google.Protobuf referenced
+- [x] `Meadow.Daemon.Contracts` project reference included
+- [x] Embedded resources: `detect.sh`, `setup-meadow.sh`, service template
+- [x] `dotnet build` succeeds (warnings only; VSIX container verification pending)
 
 ---
 
@@ -221,12 +221,12 @@ Use `DynamicVisibility` and a custom `UIContext` for this.
   (`%APPDATA%\Microsoft\VisualStudio\17.0Exp\ActivityLog.xml`)
 
 **Definition of done**:
-- [ ] `PiDbgPackage` inherits `AsyncPackage`
-- [ ] `ProvideAutoLoad` with `BackgroundLoading` on `SolutionExists` UIContext
-- [ ] `InitializeAsync` switches to main thread before registering commands
-- [ ] Service container registers `ISshConnectionManager` and `IOutputWindowService`
-- [ ] `.vsct` file defines all 4 commands in the Tools menu
-- [ ] Extension loads without errors in experimental VS instance
+- [x] `PiDbgPackage` inherits `AsyncPackage`
+- [x] `ProvideAutoLoad` with `BackgroundLoading` on `SolutionExists` UIContext
+- [x] `InitializeAsync` switches to main thread before registering commands
+- [x] Service container registers `ISshConnectionManager` and `IOutputWindowService`
+- [x] `.vsct` file defines all 4 commands in the Tools menu
+- [ ] Extension loads without errors in experimental VS instance (runtime verification pending)
 
 ---
 
@@ -367,14 +367,14 @@ Retry on connect: 3 attempts, 2s backoff, wrapping `SocketException` and `SshExc
 - Unit test: reconnect logic retries 3 times before throwing
 
 **Definition of done**:
-- [ ] `ISshConnectionManager` interface defined
-- [ ] `SshSession` wraps `SshClient` + `SftpClient` with helper methods
-- [ ] `ConnectAsync` supports both password and key-file auth
-- [ ] Session caching by host
-- [ ] Retry on connect (3 attempts, 2s backoff)
-- [ ] `OpenTunnelAsync` returns OS-assigned local port
-- [ ] `EnsureRemoteDir` creates intermediate directories
-- [ ] Dispose pattern correctly closes both clients
+- [x] `ISshConnectionManager` interface defined
+- [x] `SshSession` wraps `SshClient` + `SftpClient` with helper methods
+- [x] `ConnectAsync` supports both password and key-file auth
+- [x] Session caching by host
+- [x] Retry on connect (3 attempts, 2s backoff)
+- [x] `OpenTunnelAsync` returns OS-assigned local port
+- [x] `EnsureRemoteDir` creates intermediate directories
+- [x] Dispose pattern correctly closes both clients
 
 ---
 
@@ -476,10 +476,10 @@ var storage = hier as IVsBuildPropertyStorage;
 - Manual test: set `PiDbgHost=mypi.local` in `.csproj`, verify it is read correctly
 
 **Definition of done**:
-- [ ] Reads all 5 MSBuild properties listed above
-- [ ] Returns `null` connection config when `PiDbgHost` is not set
-- [ ] Applies correct defaults for optional properties
-- [ ] All reads happen on the UI thread
+- [x] Reads all 5 MSBuild properties listed above
+- [x] Returns `null` connection config when `PiDbgHost` is not set
+- [x] Applies correct defaults for optional properties
+- [x] All reads happen on the UI thread
 - [ ] Unit tests cover null/empty/populated cases
 
 ---
@@ -583,11 +583,11 @@ public sealed class OutputWindowService : IOutputWindowService
 - Unit test (mock): `WriteError` prefixes the message with "ERROR: "
 
 **Definition of done**:
-- [ ] Two panes: "PiDbg" and "PiDbg Provisioning"
-- [ ] Each pane has a stable GUID
-- [ ] `OutputStringThreadSafe` used for background-thread writes
-- [ ] `Activate()` brings the pane to the foreground
-- [ ] Constructor creates panes if they don't exist (idempotent)
+- [x] Two panes: "PiDbg" and "PiDbg Provisioning"
+- [x] Each pane has a stable GUID
+- [x] `OutputStringThreadSafe` used for background-thread writes
+- [x] `Activate()` brings the pane to the foreground
+- [x] Constructor creates panes if they don't exist (idempotent)
 
 ---
 
@@ -696,12 +696,12 @@ public sealed class GrpcChannelFactory : IGrpcChannelFactory, IDisposable
 - Unit test: `SocketsHttpHandler` used (not `WinHttpHandler`)
 
 **Definition of done**:
-- [ ] Uses `SocketsHttpHandler` (not `WinHttpHandler`)
-- [ ] Tunnel opened on OS-assigned port
-- [ ] Channel cached by host, reused on subsequent calls
-- [ ] Ping called after channel creation to verify connectivity
-- [ ] `Dispose` closes all tunnels and channels
-- [ ] `MaxReceiveMessageSize = 64 MB`
+- [x] Uses Grpc.Core C-core channel (net472; SocketsHttpHandler N/A — Grpc.Core bypasses HttpHandler)
+- [x] Tunnel opened on OS-assigned port
+- [x] Channel cached by host, reused on subsequent calls
+- [x] Ping called after channel creation to verify connectivity
+- [x] `Dispose` closes all tunnels and channels
+- [x] `MaxReceiveMessageLength = 64 MB`
 
 ---
 
@@ -864,12 +864,12 @@ public sealed class PublishService
 - Unit test: `ManifestSha256` field is set on the returned manifest
 
 **Definition of done**:
-- [ ] `dotnet publish` invoked with `-c Debug -r linux-arm64 --no-self-contained`
-- [ ] `EmbedAllSources=true`, `Optimize=false`, `Deterministic=true` passed as `/p:`
-- [ ] All publish output files included in manifest with SHA-256 and size
-- [ ] `ManifestSha256` field computed and set
-- [ ] Process killed on `CancellationToken` cancellation
-- [ ] Output streamed to PiDbg Output pane
+- [x] `dotnet publish` invoked with `-c Debug -r linux-arm64 --no-self-contained`
+- [x] `EmbedAllSources=true`, `Optimize=false`, `Deterministic=true` passed as `/p:`
+- [x] All publish output files included in manifest with SHA-256 and size
+- [x] `ManifestSha256` field computed and set
+- [x] Process killed on `CancellationToken` cancellation
+- [x] Output streamed to PiDbg Output pane
 
 ---
 
@@ -1009,9 +1009,9 @@ public record DeploymentProgress(string Phase, long BytesSent, long TotalBytes)
 - Integration test: deploy with a file SHA-256 mismatch → commit returns failure
 
 **Definition of done**:
-- [ ] Calls `BeginDeployment` with `deltaBase="debug"`
-- [ ] Uploads only `filesNeeded` (not all files)
-- [ ] 4 parallel SFTP uploads
-- [ ] Progress reported as bytes uploaded
-- [ ] Commits on success, aborts on failure or cancellation
-- [ ] `CommitDeploymentResponse.Success=false` surfaced as `DeploymentException`
+- [x] Calls `BeginDeployment` with `deltaBase="debug"`
+- [x] Uploads only `filesNeeded` (not all files)
+- [x] 4 parallel SFTP uploads (SemaphoreSlim + Task.WhenAll; net472 compat)
+- [x] Progress reported as bytes uploaded
+- [x] Commits on success, aborts on failure or cancellation
+- [x] `CommitDeploymentResponse.Success=false` surfaced as `DeploymentException`

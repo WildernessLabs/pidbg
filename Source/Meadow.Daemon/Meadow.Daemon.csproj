@@ -10,7 +10,7 @@
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">linux-arm64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
-    <PublishTrimmed>true</PublishTrimmed>
+    <PublishTrimmed>false</PublishTrimmed>
     <TrimmerRootDescriptor>TrimmerRoots.xml</TrimmerRootDescriptor>
     <NoWarn>$(NoWarn);CA1848;IL2026;CA1515</NoWarn>
   </PropertyGroup>

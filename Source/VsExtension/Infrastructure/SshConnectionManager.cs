@@ -1,36 +1,110 @@
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net.Sockets;
+using System.Threading;
+using System.Threading.Tasks;
 using Renci.SshNet;
+using Renci.SshNet.Common;
 
 namespace PiDbg.Infrastructure;
 
-// Manages a persistent SSH connection to the target Pi.
-// Reconnects automatically on transient failures.
-// Implemented in Phase 4 (P4.3).
-internal sealed class SshConnectionManager : IDisposable
+internal sealed class SshConnectionManager : ISshConnectionManager, IDisposable
 {
-    private SshClient? _client;
-    private readonly object _lock = new();
+    private readonly ConcurrentDictionary<string, SshSession> _sessions =
+        new ConcurrentDictionary<string, SshSession>(StringComparer.OrdinalIgnoreCase);
 
-    public string Host { get; private set; } = "";
-    public int Port { get; private set; } = 22;
-    public string Username { get; private set; } = "";
-    public bool IsConnected => _client?.IsConnected == true;
+    private readonly IOutputWindowService _output;
 
-    public Task ConnectAsync(string host, int port, string username,
-        string privateKeyPath, CancellationToken ct)
-        => throw new NotImplementedException("Implemented in Phase 4");
-
-    public Task DisconnectAsync()
-        => throw new NotImplementedException("Implemented in Phase 4");
-
-    public SshClient GetClient()
+    public SshConnectionManager(IOutputWindowService output)
     {
-        if (_client is null || !_client.IsConnected)
-            throw new InvalidOperationException("Not connected");
-        return _client;
+        _output = output;
     }
 
-    public Task<string> ExecuteCommandAsync(string command, CancellationToken ct)
-        => throw new NotImplementedException("Implemented in Phase 4");
+    public async Task<SshSession> ConnectAsync(SshConnectionConfig config, CancellationToken ct)
+    {
+        var key = $"{config.Host}:{config.Port}";
 
-    public void Dispose() => _client?.Dispose();
+        if (_sessions.TryGetValue(key, out var existing) && existing.Ssh.IsConnected)
+            return existing;
+
+        AuthenticationMethod[] authMethods = config.KeyFile != null
+            ? new AuthenticationMethod[]
+              { new PrivateKeyAuthenticationMethod(config.User, new PrivateKeyFile(config.KeyFile)) }
+            : new AuthenticationMethod[]
+              { new PasswordAuthenticationMethod(config.User, config.Password ?? "") };
+
+        var connInfo = new ConnectionInfo(config.Host, config.Port, config.User, authMethods);
+        var session  = await ConnectWithRetryAsync(connInfo, config.Host, ct).ConfigureAwait(false);
+
+        _sessions[key] = session;
+        _output.WriteLine(OutputPane.PiDbg,
+            $"Connected to {config.Host}:{config.Port} as {config.User}");
+        return session;
+    }
+
+    private async Task<SshSession> ConnectWithRetryAsync(
+        ConnectionInfo connInfo, string host, CancellationToken ct)
+    {
+        const int maxAttempts = 3;
+        const int backoffMs   = 2000;
+
+        Exception last = null;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                var ssh  = new SshClient(connInfo);
+                var sftp = new SftpClient(connInfo);
+                await Task.Run(() => { ssh.Connect(); sftp.Connect(); }, ct)
+                          .ConfigureAwait(false);
+                return new SshSession(ssh, sftp, host);
+            }
+            catch (Exception ex) when (ex is SocketException || ex is SshException)
+            {
+                last = ex;
+                _output.WriteWarning(OutputPane.PiDbg,
+                    $"SSH connect attempt {attempt}/{maxAttempts} to {host} failed: {ex.Message}");
+
+                if (attempt < maxAttempts)
+                    await Task.Delay(backoffMs, ct).ConfigureAwait(false);
+            }
+        }
+        throw new InvalidOperationException(
+            $"Failed to connect to {connInfo.Host} after {maxAttempts} attempts.", last);
+    }
+
+    public void Disconnect(string host)
+    {
+        var toRemove = _sessions.Keys
+            .Where(k => k.StartsWith(host + ":", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        foreach (var key in toRemove)
+        {
+            if (_sessions.TryRemove(key, out var session))
+                session.Dispose();
+        }
+        _output.WriteLine(OutputPane.PiDbg, $"Disconnected from {host}");
+    }
+
+    public SshSession GetActiveSession(string host)
+    {
+        foreach (var kvp in _sessions)
+        {
+            if (kvp.Key.StartsWith(host + ":", StringComparison.OrdinalIgnoreCase)
+                && kvp.Value.Ssh.IsConnected)
+                return kvp.Value;
+        }
+        return null;
+    }
+
+    public void Dispose()
+    {
+        foreach (var session in _sessions.Values)
+            session.Dispose();
+        _sessions.Clear();
+    }
 }
