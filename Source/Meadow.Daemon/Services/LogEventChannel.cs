@@ -1,37 +1,79 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
+using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Meadow.Daemon.Contracts.V1;
 
 namespace Meadow.Daemon.Services;
 
+// Fan-out log channel: each subscriber gets its own bounded inner channel so that
+// slow or disconnected gRPC clients don't starve other subscribers.
 public sealed class LogEventChannel : IAsyncDisposable
 {
-    // Bounded at 10,000 — if no subscriber is reading, events drop rather than OOM.
-    private readonly Channel<LogEvent> _channel =
-        Channel.CreateBounded<LogEvent>(new BoundedChannelOptions(10_000)
+    private readonly Lock _lock = new();
+    private readonly List<Channel<LogEvent>> _subscribers = [];
+    private bool _disposed;
+
+    public bool TryWrite(LogEvent evt)
+    {
+        List<Channel<LogEvent>> snapshot;
+        lock (_lock)
+        {
+            if (_disposed) return false;
+            snapshot = [.._subscribers];
+        }
+        foreach (var ch in snapshot)
+            ch.Writer.TryWrite(evt);
+        return true;
+    }
+
+    public IAsyncEnumerable<LogEvent> Subscribe(CancellationToken ct)
+    {
+        var ch = Channel.CreateBounded<LogEvent>(new BoundedChannelOptions(1_000)
         {
             FullMode = BoundedChannelFullMode.DropOldest,
-            SingleWriter = false,
-            SingleReader = false
+            SingleWriter = true,
+            SingleReader = true,
         });
 
-    public bool TryWrite(LogEvent evt) => _channel.Writer.TryWrite(evt);
+        lock (_lock)
+        {
+            if (_disposed)
+            {
+                ch.Writer.TryComplete();
+                return ch.Reader.ReadAllAsync(ct);
+            }
+            _subscribers.Add(ch);
+        }
 
-    // Each call to Subscribe returns an independent async enumerable.
-    // Multiple gRPC stream calls each get their own cursor.
-    public IAsyncEnumerable<LogEvent> Subscribe(CancellationToken ct)
-        => _channel.Reader.ReadAllAsync(ct);
+        return ReadAndUnsubscribeAsync(ch, ct);
+    }
 
-    public async ValueTask DisposeAsync()
+    private async IAsyncEnumerable<LogEvent> ReadAndUnsubscribeAsync(
+        Channel<LogEvent> ch,
+        [EnumeratorCancellation] CancellationToken ct)
     {
-        _channel.Writer.TryComplete();
-        // Drain remaining items so subscribers see a clean end
         try
         {
-            await foreach (var _ in _channel.Reader.ReadAllAsync()) { }
+            await foreach (var evt in ch.Reader.ReadAllAsync(ct).ConfigureAwait(false))
+                yield return evt;
         }
-        catch (OperationCanceledException) { }
+        finally
+        {
+            lock (_lock)
+                _subscribers.Remove(ch);
+            ch.Writer.TryComplete();
+        }
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        lock (_lock)
+        {
+            if (_disposed) return ValueTask.CompletedTask;
+            _disposed = true;
+            foreach (var ch in _subscribers)
+                ch.Writer.TryComplete();
+            _subscribers.Clear();
+        }
+        return ValueTask.CompletedTask;
     }
 }

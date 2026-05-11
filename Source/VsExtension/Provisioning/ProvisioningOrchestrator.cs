@@ -34,9 +34,9 @@ internal sealed class ProvisioningOrchestrator
 
 internal sealed class ProvisioningResult
 {
-    public bool Success { get; init; }
-    public string? ErrorMessage { get; init; }
-    public CapabilityReport? Report { get; init; }
+    public bool Success { get; set; }
+    public string? ErrorMessage { get; set; }
+    public CapabilityReport? Report { get; set; }
 }
 
 internal enum ProvisioningStep

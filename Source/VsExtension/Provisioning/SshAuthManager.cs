@@ -22,6 +22,6 @@ internal sealed class SshAuthManager
 
 internal sealed class SshKeyPair
 {
-    public required string PrivateKeyPath { get; init; }
-    public required string PublicKey { get; init; }
+    public string PrivateKeyPath { get; set; }
+    public string PublicKey { get; set; }
 }

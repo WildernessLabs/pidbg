@@ -1,6 +1,6 @@
 using Meadow.Daemon.Contracts.V1;
+
 using PiDbg.Infrastructure;
-using Renci.SshNet;
 
 namespace PiDbg.Deploy;
 
@@ -33,15 +33,15 @@ internal sealed class SftpDeploymentClient
 
 internal sealed class DeploymentResult
 {
-    public bool Success { get; init; }
-    public string? ErrorMessage { get; init; }
-    public string? VersionLabel { get; init; }
+    public bool Success { get; set; }
+    public string? ErrorMessage { get; set; }
+    public string? VersionLabel { get; set; }
 }
 
 internal sealed class DeploymentProgress
 {
-    public int FilesUploaded { get; init; }
-    public int FilesTotal { get; init; }
-    public long BytesUploaded { get; init; }
-    public long BytesTotal { get; init; }
+    public int FilesUploaded { get; set; }
+    public int FilesTotal { get; set; }
+    public long BytesUploaded { get; set; }
+    public long BytesTotal { get; set; }
 }

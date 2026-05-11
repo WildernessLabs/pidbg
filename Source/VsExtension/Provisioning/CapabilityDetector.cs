@@ -16,13 +16,13 @@ internal sealed class CapabilityDetector
 
 internal sealed class CapabilityReport
 {
-    public bool DaemonInstalled { get; init; }
-    public string? DaemonVersion { get; init; }
-    public bool DaemonRunning { get; init; }
-    public bool VsdbgInstalled { get; init; }
-    public string? VsdbgVersion { get; init; }
-    public string? Architecture { get; init; }
-    public string? DotnetVersion { get; init; }
-    public bool SystemdAvailable { get; init; }
-    public bool SudoAvailable { get; init; }
+    public bool DaemonInstalled { get; set; }
+    public string? DaemonVersion { get; set; }
+    public bool DaemonRunning { get; set; }
+    public bool VsdbgInstalled { get; set; }
+    public string? VsdbgVersion { get; set; }
+    public string? Architecture { get; set; }
+    public string? DotnetVersion { get; set; }
+    public bool SystemdAvailable { get; set; }
+    public bool SudoAvailable { get; set; }
 }

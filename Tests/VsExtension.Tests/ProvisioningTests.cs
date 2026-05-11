@@ -1,3 +1,5 @@
+using Xunit;
+
 namespace PiDbg.Tests;
 
 // Provisioning logic tests — focus on pure/testable types like PlatformValidator.

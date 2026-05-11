@@ -1,4 +1,8 @@
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+  </Folder>
   <Folder Name="/Source/">
     <Project Path="Source\Meadow.Daemon.Contracts\Meadow.Daemon.Contracts.csproj" />
     <Project Path="Source\Meadow.Daemon\Meadow.Daemon.csproj" />

@@ -1,18 +1,32 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net9.0;netstandard2.1</TargetFrameworks>
+    <TargetFrameworks>net9.0;net472</TargetFrameworks>
+    <OutputType>Library</OutputType>
     <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Meadow.Daemon.Contracts</RootNamespace>
     <AssemblyName>Meadow.Daemon.Contracts</AssemblyName>
     <Description>gRPC contracts (proto + generated stubs) for Meadow.Daemon v1</Description>
   </PropertyGroup>
 
+  <!-- ImplicitUsings is a .NET 6+ SDK feature; not applicable to net472 -->
+  <PropertyGroup Condition="'$(TargetFramework)' != 'net472'">
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Google.Protobuf" />
     <PackageReference Include="Grpc.Tools" PrivateAssets="All" />
+  </ItemGroup>
+
+  <!-- Managed HTTP/2 client for daemon (net9.0) -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
     <PackageReference Include="Grpc.Net.Client" />
+  </ItemGroup>
+
+  <!-- C-core client for VSIX (net472) -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net472'">
+    <PackageReference Include="Grpc.Core" />
   </ItemGroup>
 
   <ItemGroup>
@@ -25,3 +39,4 @@
   </ItemGroup>
 
 </Project>
+

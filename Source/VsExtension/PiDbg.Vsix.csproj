@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net9.0-windows</TargetFramework>
+    <TargetFramework>net472</TargetFramework>
     <OutputType>Library</OutputType>
     <RootNamespace>PiDbg</RootNamespace>
     <AssemblyName>PiDbg.Vsix</AssemblyName>
@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <!-- VS SDK -->
+    <PackageReference Include="Microsoft.Build.Tasks.Core" />
     <PackageReference Include="Microsoft.VSSDK.BuildTools" PrivateAssets="All" />
     <PackageReference Include="Microsoft.VisualStudio.Shell.15.0" />
     <PackageReference Include="Microsoft.VisualStudio.Interop" />
@@ -33,6 +34,7 @@
     <PackageReference Include="SSH.NET" />
     <PackageReference Include="Grpc.Net.Client" />
     <PackageReference Include="Google.Protobuf" />
+    <PackageReference Include="System.Security.Cryptography.Xml" />
   </ItemGroup>
 
   <ItemGroup>

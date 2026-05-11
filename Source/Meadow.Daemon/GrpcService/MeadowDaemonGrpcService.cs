@@ -251,12 +251,18 @@ internal sealed class MeadowDaemonGrpcService : MeadowDaemonService.MeadowDaemon
                 dir = DaemonPaths.AppVersionDir(_options.Value, request.AppName, active);
         }
 
-        if (dir == null || !Directory.Exists(dir))
-            return new GetCurrentManifestResponse { Found = false };
+        if (dir == null)
+            throw new RpcException(new Status(StatusCode.NotFound,
+                $"No active version for app '{request.AppName}'"));
+
+        if (!Directory.Exists(dir))
+            throw new RpcException(new Status(StatusCode.NotFound,
+                $"Deployment directory not found for app '{request.AppName}'"));
 
         var manifestPath = Path.Combine(dir, "manifest.json");
         if (!File.Exists(manifestPath))
-            return new GetCurrentManifestResponse { Found = false };
+            throw new RpcException(new Status(StatusCode.NotFound,
+                $"No manifest found for app '{request.AppName}'"));
 
         try
         {

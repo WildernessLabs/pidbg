@@ -20,7 +20,7 @@ internal sealed class DotnetPublishRunner
 
 internal sealed class PublishResult
 {
-    public bool Success { get; init; }
-    public string? OutputDirectory { get; init; }
-    public string? ErrorMessage { get; init; }
+    public bool Success { get; set; }
+    public string? OutputDirectory { get; set; }
+    public string? ErrorMessage { get; set; }
 }

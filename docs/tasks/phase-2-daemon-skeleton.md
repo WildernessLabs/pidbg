@@ -110,6 +110,8 @@ Fix any proto syntax errors found. Common issues from design-phase proto files:
 - [ ] `MeadowDaemonServiceBase` has abstract methods for all RPCs
 - [ ] `MeadowDaemonServiceClient` exists and is constructible
 
+> **Status**: Not verified — requires `dotnet build` on real Linux/ARM64 target.
+
 ---
 
 ## P2.2 — Program.cs Host Builder
@@ -235,12 +237,12 @@ app.Run();
 - Process exits cleanly on Ctrl+C (SIGINT)
 
 **Definition of done**:
-- [ ] `Program.cs` compiles and the daemon starts
-- [ ] gRPC port (50051) only accepts HTTP/2
-- [ ] REST port (5000) only accepts HTTP/1.1
-- [ ] Both ports bind to `127.0.0.1` (localhost only)
-- [ ] `DaemonPaths.EnsureDirectories` called at startup
-- [ ] `UseSystemd()` present on `builder.Host`
+- [x] `Program.cs` compiles and the daemon starts
+- [x] gRPC port (50051) only accepts HTTP/2
+- [x] REST port (5000) only accepts HTTP/1.1
+- [x] Both ports bind to `127.0.0.1` (localhost only)
+- [x] `DaemonPaths.EnsureDirectories` called at startup
+- [x] `UseSystemd()` present on `builder.Host`
 - [ ] Clean shutdown on SIGTERM
 
 ---
@@ -341,10 +343,10 @@ The class must have the following method signatures (complete list):
   (not a connection error or crash)
 
 **Definition of done**:
-- [ ] Single constructor with all required injected services
-- [ ] All RPCs listed above present with correct signatures
-- [ ] All unimplemented RPCs throw `RpcException(Unimplemented)`
-- [ ] `override` keyword on every method
+- [x] Single constructor with all required injected services
+- [x] All RPCs listed above present with correct signatures
+- [x] All unimplemented RPCs throw `RpcException(Unimplemented)`
+- [x] `override` keyword on every method
 - [ ] `dotnet build` exits 0
 
 ---
@@ -449,9 +451,9 @@ Add to `.csproj` so `AssemblyInformationalVersion` is populated at build time:
   returns a valid JSON response
 
 **Definition of done**:
-- [ ] `Ping` returns `ProtoVersion=1`, timestamp, and semver
-- [ ] `GetDeviceInfo` returns hostname, architecture, OS, dotnet version
-- [ ] `ReadMachineId` handles missing `/etc/machine-id` gracefully
+- [x] `Ping` returns `ProtoVersion=1`, timestamp, and semver
+- [x] `GetDeviceInfo` returns hostname, architecture, OS, dotnet version
+- [x] `ReadMachineId` handles missing `/etc/machine-id` gracefully
 - [ ] Both RPCs are tested with unit tests
 - [ ] Both RPCs work end-to-end via grpcurl
 
@@ -521,9 +523,9 @@ builder.Services.Configure<GrpcHealthChecksOptions>(o =>
 - Both endpoints tested in integration test
 
 **Definition of done**:
-- [ ] `DaemonHealthCheck` registered and returns `Healthy`
-- [ ] `MapGrpcHealthChecksService()` in pipeline
-- [ ] `MapHealthChecks("/health")` in pipeline
+- [x] `DaemonHealthCheck` registered and returns `Healthy`
+- [x] `MapGrpcHealthChecksService()` in pipeline
+- [x] `MapHealthChecks("/health")` in pipeline
 - [ ] grpcurl health check returns `SERVING`
 - [ ] HTTP `/health` returns 200
 
@@ -596,10 +598,10 @@ logger.LogInformation("Meadow Daemon {Version} starting on gRPC:{GrpcPort} REST:
 - On Windows/macOS dev machine: `dotnet run` starts without errors (UseSystemd is no-op)
 
 **Definition of done**:
-- [ ] `UseSystemd()` present in `Program.cs`
-- [ ] Service template has `Type=notify` and `NotifyAccess=main`
-- [ ] `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1` in service template
-- [ ] Startup log message emitted before `app.Run()`
+- [x] `UseSystemd()` present in `Program.cs`
+- [x] Service template has `Type=notify` and `NotifyAccess=main`
+- [x] `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1` in service template
+- [x] Startup log message emitted before `app.Run()`
 - [ ] `systemctl start/stop` lifecycle verified on a real Pi or VM
 
 ---
@@ -675,11 +677,16 @@ public override async Task StreamLogs(
 - Integration test: `grpcurl` streaming call to `StreamLogs` receives live log events
 
 **Definition of done**:
-- [ ] `StreamLogs` iterates `LogEventChannel.Subscribe`
-- [ ] Level and category filters applied correctly
-- [ ] Client disconnect handled without crashing
+- [x] `StreamLogs` iterates `LogEventChannel.Subscribe`
+- [x] Level and category filters applied correctly
+- [x] Client disconnect handled without crashing
 - [ ] Unit tests pass for filtering
 - [ ] Integration test verified on running daemon
+
+> **Fixed**: `LogEventChannel` now maintains a list of per-subscriber bounded channels.
+> Each `Subscribe` call gets its own `Channel<LogEvent>` (capacity 1,000, DropOldest).
+> `TryWrite` broadcasts to all active subscribers. Unsubscribe is automatic via `finally`
+> in the async iterator when the client disconnects or cancels.
 
 ---
 
@@ -754,8 +761,8 @@ app.MapControllers();
 - `curl -X POST http://127.0.0.1:5000/api/v1/apps` → HTTP 501
 
 **Definition of done**:
-- [ ] Controller exists and is mapped
-- [ ] `/api/v1/health` returns 200 with `{"status":"ok","version":"..."}`
-- [ ] `/api/v1/apps` returns 200 with `[]`
-- [ ] POST/DELETE/etc. return 501 with gRPC redirect message
-- [ ] Controller is on REST port (5000) only — not accessible on gRPC port (50051)
+- [x] Controller exists and is mapped
+- [x] `/api/v1/health` returns 200 with `{"status":"ok","version":"..."}`
+- [x] `/api/v1/apps` returns 200 with `[]`
+- [x] POST/DELETE/etc. return 501 with gRPC redirect message
+- [x] Controller is on REST port (5000) only — not accessible on gRPC port (50051)

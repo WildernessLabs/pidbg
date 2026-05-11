@@ -138,11 +138,11 @@ public sealed class VersionStore
 - Unit test (any): `SanitizeName` rejects traversal in all version paths
 
 **Definition of done**:
-- [ ] `VersionStore` compiles on all target platforms
-- [ ] Symlink operations use `Mono.Unix.Native.Syscall`
-- [ ] Relative symlink targets (not absolute)
-- [ ] `DeleteVersion` guards against deleting active version
-- [ ] `active.new` cleanup is idempotent (crash-safe)
+- [x] `VersionStore` compiles on all target platforms
+- [x] Symlink operations use `Mono.Unix.Native.Syscall`
+- [x] Relative symlink targets (not absolute)
+- [x] `DeleteVersion` guards against deleting active version
+- [x] `active.new` cleanup is idempotent (crash-safe)
 - [ ] All unit tests pass on Linux
 
 ---
@@ -267,11 +267,11 @@ public sealed class StagingController
   (verify inode count with `stat`)
 
 **Definition of done**:
-- [ ] `CreateStaging` is idempotent (handles stale staging)
-- [ ] `CleanStaging` handles missing directory
-- [ ] `HardLinkUnchangedFilesAsync` uses `Syscall.link`
-- [ ] Hard link failures are non-fatal and logged
-- [ ] Returns set of linked file paths so caller knows what not to upload
+- [x] `CreateStaging` is idempotent (handles stale staging)
+- [x] `CleanStaging` handles missing directory
+- [x] `HardLinkUnchangedFilesAsync` uses `Syscall.link`
+- [x] Hard link failures are non-fatal and logged
+- [x] Returns set of linked file paths so caller knows what not to upload
 - [ ] Unit tests pass
 
 ---
@@ -394,11 +394,11 @@ public sealed class ManifestVerifier
 - Performance test: verifying 50 files of 1 MB each completes in < 10 seconds on Pi hardware
 
 **Definition of done**:
-- [ ] Manifest-level hash check runs first
-- [ ] Per-file SHA-256 verified in parallel (4 workers)
-- [ ] Missing files reported as failures (not exceptions)
-- [ ] I/O errors per file are non-fatal to other files
-- [ ] Returns per-file result list for detailed error reporting
+- [x] Manifest-level hash check runs first
+- [x] Per-file SHA-256 verified in parallel (4 workers)
+- [x] Missing files reported as failures (not exceptions)
+- [x] I/O errors per file are non-fatal to other files
+- [x] Returns per-file result list for detailed error reporting
 - [ ] All tests pass
 
 ---
@@ -508,12 +508,12 @@ Key methods:
 - Unit test: `AbortDeploymentAsync` on unknown deploymentId is a no-op (not throws)
 
 **Definition of done**:
-- [ ] `IDeploymentManager` interface defined
-- [ ] Per-app semaphore with `Cancel-and-Replace` for debug, `Queue` for production
-- [ ] `BeginDeploymentAsync` returns only the files that need uploading
-- [ ] `CommitDeploymentAsync` runs verification before activation
-- [ ] Semaphore always released in `finally`
-- [ ] `manifest.json` written to staging before activation
+- [x] `IDeploymentManager` interface defined
+- [x] Per-app semaphore with `Cancel-and-Replace` for debug, `Queue` for production
+- [x] `BeginDeploymentAsync` returns only the files that need uploading
+- [x] `CommitDeploymentAsync` runs verification before activation
+- [x] Semaphore always released in `finally`
+- [x] `manifest.json` written to staging before activation
 - [ ] All integration tests pass
 
 ---
@@ -590,10 +590,10 @@ private async Task ActivateDebugSlotAsync(string appName, string stagingDir, Can
 - Unit test: `old/` directory is cleaned up asynchronously
 
 **Definition of done**:
-- [ ] `Directory.Move(staging, debug)` is the activation step (single rename)
-- [ ] Previous `debug/` moved to `.old` before activation
-- [ ] `.old` cleanup is asynchronous (not blocking commit path)
-- [ ] Crash recovery: stale `.old` is handled on next activation
+- [x] `Directory.Move(staging, debug)` is the activation step (single rename)
+- [x] Previous `debug/` moved to `.old` before activation
+- [x] `.old` cleanup is asynchronous (not blocking commit path)
+- [x] Crash recovery: stale `.old` is handled on next activation
 - [ ] Integration test passes
 
 ---
@@ -647,9 +647,9 @@ is the atomic step.
 - Integration test: crash between `Move` and symlink swap — previous active still valid
 
 **Definition of done**:
-- [ ] Staging moved to `versions/{versionId}/` via `Directory.Move`
-- [ ] `VersionStore.SetActiveVersion` called for atomic symlink swap
-- [ ] Previous version remains on disk (not deleted)
+- [x] Staging moved to `versions/{versionId}/` via `Directory.Move`
+- [x] `VersionStore.SetActiveVersion` called for atomic symlink swap
+- [x] Previous version remains on disk (not deleted)
 - [ ] Integration tests pass
 
 ---
@@ -707,11 +707,14 @@ should call `IProcessManager.RestartAsync(appName)` after the symlink swap.
 - Performance test: rollback completes in < 10 ms
 
 **Definition of done**:
-- [ ] `Rollback` uses `SetActiveVersion` (atomic symlink)
-- [ ] Returns success + new active version ID on success
-- [ ] Returns failure with reason when no previous version exists
-- [ ] Does not delete any version directories
+- [x] `Rollback` uses `SetActiveVersion` (atomic symlink)
+- [x] Returns success + new active version ID on success
+- [x] Returns failure with reason when no previous version exists
+- [x] Does not delete any version directories
 - [ ] Unit tests pass
+
+> **Gap**: Spec requires `DeploymentManager.RollbackAsync` to call `IProcessManager.RestartAsync(appName)`
+> after the symlink swap. Not implemented — `ProcessManager` (P5) is not yet done. Add this wire-up in P5.
 
 ---
 
@@ -814,11 +817,11 @@ private static void ValidateAppName(string name)
 - Integration test: `GetCurrentManifest` returns `NotFound` when no active version
 
 **Definition of done**:
-- [ ] All deployment RPCs implemented (not stubbed)
-- [ ] `ValidateAppName` called at gRPC boundary for all RPCs taking appName
-- [ ] `NotFound` returned for missing resources (not `Internal`)
-- [ ] `InvalidArgument` returned for invalid input
-- [ ] Proto string fields never receive null
+- [x] All deployment RPCs implemented (not stubbed)
+- [x] `ValidateAppName` called at gRPC boundary for all RPCs taking appName
+- [x] `NotFound` returned for missing resources — fixed: `GetCurrentManifest` now throws `RpcException(StatusCode.NotFound)` for missing active version, missing directory, or missing manifest file
+- [x] `InvalidArgument` returned for invalid input
+- [x] Proto string fields never receive null
 - [ ] All integration tests pass
 
 ---
@@ -895,11 +898,11 @@ production slots, using `_options.DeploymentRetentionCount`.
 - Unit test: pruning failure on one version does not stop pruning of others
 
 **Definition of done**:
-- [ ] Active version always excluded from deletion
-- [ ] Correct count of versions retained (retentionCount non-active versions kept)
-- [ ] Orphan staging cleanup on prune
-- [ ] Per-version failure is non-fatal
-- [ ] Called automatically after production slot commit
+- [x] Active version always excluded from deletion
+- [x] Correct count of versions retained (retentionCount non-active versions kept)
+- [x] Orphan staging cleanup on prune
+- [x] Per-version failure is non-fatal
+- [x] Called automatically after production slot commit
 - [ ] Unit tests pass
 
 ---
@@ -980,8 +983,8 @@ VSIX side contract (documented for Phase 4):
 - Unit test: delta with all files unchanged → `filesNeeded` is empty
 
 **Definition of done**:
-- [ ] `BeginDeploymentRequest` has `optional string delta_base`
-- [ ] `BeginDeploymentResponse` has `repeated string files_needed`
-- [ ] Delta source resolved from `delta_base` value
-- [ ] `filesNeeded` contains only files not hard-linked
+- [x] `BeginDeploymentRequest` has `optional string delta_base`
+- [x] `BeginDeploymentResponse` has `repeated string files_needed`
+- [x] Delta source resolved from `delta_base` value
+- [x] `filesNeeded` contains only files not hard-linked
 - [ ] All integration tests pass
