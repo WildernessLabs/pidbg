@@ -16,10 +16,10 @@ enum SessionMode {
 
 enum SessionState {
   SESSION_STATE_UNSPECIFIED = 0;
-  STARTING                  = 1;
-  ACTIVE                    = 2;
-  STOPPING                  = 3;
-  ENDED                     = 4;
+  SESSION_STATE_STARTING    = 1;
+  SESSION_STATE_ACTIVE      = 2;
+  SESSION_STATE_STOPPING    = 3;
+  SESSION_STATE_ENDED       = 4;
 }
 
 // ─── Session Status ──────────────────────────────────────────────────────────
@@ -51,10 +51,12 @@ message InstallVsdbgRequest {
   string version = 1; // e.g. "latest" or "17.12.0"
 }
 
-message InstallVsdbgResponse {
-  bool   success       = 1;
-  string version       = 2; // installed version
-  string error_message = 3;
+message InstallVsdbgProgress {
+  bool   success        = 1;
+  string version        = 2; // installed version
+  string error_message  = 3;
+  int32  percent        = 4;
+  string status_message = 5;
 }
 
 // For air-gapped devices: upload tarball via SFTP first, then call this

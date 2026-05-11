@@ -7,26 +7,35 @@
     <OutputType>Exe</OutputType>
 
     <!-- Self-contained single-file for linux-arm64 -->
-    <RuntimeIdentifier>linux-arm64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">linux-arm64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
     <PublishTrimmed>true</PublishTrimmed>
     <TrimmerRootDescriptor>TrimmerRoots.xml</TrimmerRootDescriptor>
+    <NoWarn>$(NoWarn);CA1848;IL2026;CA1515</NoWarn>
   </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>Meadow.Daemon.Tests</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>DynamicProxyGenAssembly2</_Parameter1> <!-- For Moq -->
+    </AssemblyAttribute>
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Meadow.Daemon.Contracts\Meadow.Daemon.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Generic Host + Kestrel -->
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
-
     <!-- systemd: sd_notify, UseSystemd() -->
     <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" />
 
     <!-- gRPC server -->
     <PackageReference Include="Grpc.AspNetCore" />
+    <PackageReference Include="Grpc.AspNetCore.Server.Reflection" />
+    <PackageReference Include="Grpc.AspNetCore.HealthChecks" />
     <PackageReference Include="Grpc.HealthCheck" />
 
     <!-- POSIX syscalls: symlink, rename, SIGTERM -->

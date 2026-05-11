@@ -1,8 +1,10 @@
+using Microsoft.Extensions.Options;
+
 namespace Meadow.Daemon.Services;
 
 // Coordinates vsdbg install state queries and tarball-based installs.
 // Implemented in Phase 5 (P5.5).
-internal sealed class VsdbgManager
+internal class VsdbgManager
 {
     private readonly VsdbgInstaller _installer;
     private readonly DaemonOptions _opts;
@@ -10,11 +12,11 @@ internal sealed class VsdbgManager
 
     public VsdbgManager(
         VsdbgInstaller installer,
-        DaemonOptions opts,
+        IOptions<DaemonOptions> opts,
         ILogger<VsdbgManager> log)
     {
         _installer = installer;
-        _opts = opts;
+        _opts = opts.Value;
         _log = log;
     }
 }

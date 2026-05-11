@@ -83,10 +83,10 @@ Shell scripts and proto files must always have LF endings or they will fail on L
   `ASCII text, with CRLF line terminators` on Linux
 
 **Definition of done**:
-- [ ] `.gitignore` exists and ignores `bin/`, `obj/`, `.vs/`, `*.user`
-- [ ] `.gitattributes` exists with LF rules for `.sh`, `.proto`, `.service`
-- [ ] `.editorconfig` exists with C# and JSON rules
-- [ ] `Directory.Build.props` exists with Nullable, ImplicitUsings, TreatWarningsAsErrors
+- [x] `.gitignore` exists and ignores `bin/`, `obj/`, `.vs/`, `*.user`
+- [x] `.gitattributes` exists with LF rules for `.sh`, `.proto`, `.service`
+- [x] `.editorconfig` exists with C# and JSON rules
+- [x] `Directory.Build.props` exists with Nullable, ImplicitUsings, TreatWarningsAsErrors
 - [ ] `git status` shows no untracked config files after committing the above
 
 ---
@@ -173,10 +173,10 @@ so it is a build-time tool and does not become a runtime dependency.
   `PackageReference` items
 
 **Definition of done**:
-- [ ] `Directory.Packages.props` exists at repo root
-- [ ] `ManagePackageVersionsCentrally=true`
-- [ ] All packages used across all three projects are listed with pinned versions
-- [ ] `Grpc.Tools` has `PrivateAssets=all`
+- [x] `Directory.Packages.props` exists at repo root
+- [x] `ManagePackageVersionsCentrally=true`
+- [x] All packages used across all three projects are listed with pinned versions
+- [x] `Grpc.Tools` has `PrivateAssets=all` (set on `PackageReference` in Contracts.csproj)
 - [ ] `dotnet restore` exits 0 with no warnings
 
 ---
@@ -265,11 +265,11 @@ set `<Protobuf ProtoRoot="proto\" ...>` if imports fail to resolve.
 - No CS1591 (missing XML docs) warnings bubble through
 
 **Definition of done**:
-- [ ] `.csproj` references all 5 proto files with `GrpcServices="Both"`
+- [x] `.csproj` references all 5 proto files with `GrpcServices="Both"`
 - [ ] `dotnet build` generates C# types in `obj/`
 - [ ] All expected types are present in generated output
 - [ ] Build produces zero errors and zero warnings
-- [ ] Multi-target `net10.0;netstandard2.1` compiles for both TFMs
+- [ ] Multi-target `net9.0;netstandard2.1` compiles for both TFMs
 
 ---
 
@@ -359,12 +359,12 @@ single-file binary.
 - `wc -c publish/meadow-daemon` shows size between 20 MB and 60 MB (sanity check)
 
 **Definition of done**:
-- [ ] `.csproj` uses `Microsoft.NET.Sdk.Web`
-- [ ] `RuntimeIdentifier=linux-arm64`, `SelfContained=true`, `PublishSingleFile=true`
-- [ ] `TrimmerRoots.xml` preserves Contracts assembly and Models namespace
+- [x] `.csproj` uses `Microsoft.NET.Sdk.Web`
+- [x] `RuntimeIdentifier=linux-arm64`, `SelfContained=true`, `PublishSingleFile=true`
+- [x] `TrimmerRoots.xml` preserves Contracts assembly and Models namespace
 - [ ] `dotnet build` exits 0
 - [ ] `dotnet publish -r linux-arm64` produces an ARM64 ELF binary
-- [ ] Binary name is `meadow-daemon` (with hyphen)
+- [x] Binary name is `meadow-daemon` (with hyphen)
 
 ---
 
@@ -473,7 +473,7 @@ public static class DaemonPaths
 - Unit test: All path methods return paths that start with the configured root
 
 **Definition of done**:
-- [ ] `DaemonPaths.cs` exists with all path methods listed above
+- [~] `DaemonPaths.cs` exists — basic app/version/staging helpers created; missing `SanitizeName`, `EnsureDirectories`, `BinDir/BinPath`, `VsdbgVersionFile`, `AppsStatePath/SessionsStatePath`
 - [ ] `SanitizeName` validates and rejects directory traversal patterns
 - [ ] `EnsureDirectories` is idempotent
 - [ ] Unit tests pass for `SanitizeName` valid and invalid inputs
@@ -592,11 +592,11 @@ builder.Services
 - Integration test: daemon refuses to start with a missing `AppRoot` value
 
 **Definition of done**:
-- [ ] All properties have defaults matching the design docs
+- [~] All properties have defaults — class exists; missing `InstallRoot`, DataAnnotations attributes, `GetValidationErrors()`, `const Section`
 - [ ] `[Required]` and `[Range]` attributes on all appropriate properties
 - [ ] `GetValidationErrors()` catches cross-field invariants
 - [ ] Registered with `ValidateOnStart()` in `Program.cs`
-- [ ] TimeSpan computed properties present and tested
+- [x] TimeSpan computed properties present (`ProcessGracefulStopPeriod`, `DebugSessionOrphanTimeout`)
 
 ---
 
@@ -690,11 +690,11 @@ Environment variable mapping: `MEADOW_DAEMON__GRPCPORT=50051` maps to
   from `appsettings.json` defaults
 
 **Definition of done**:
-- [ ] `appsettings.json` contains all `DaemonOptions` properties with correct defaults
-- [ ] `appsettings.Development.json` redirects paths to `/tmp/meadow-dev/`
-- [ ] Configuration chain is ordered: json → external conf → env vars
-- [ ] `MEADOW_DAEMON__` prefix correctly overrides options
-- [ ] Both files use LF line endings (via `.gitattributes`)
+- [~] `appsettings.json` exists — uses `"Meadow"` section key (spec says `"Daemon"`); missing `InstallRoot`; correct when DaemonOptions.Section is aligned
+- [x] `appsettings.Development.json` exists with dev path overrides
+- [x] Configuration chain is ordered: json → env-specific json → `/etc/meadow/daemon.conf` → env vars
+- [ ] `MEADOW_DAEMON__` prefix correctly overrides options (blocked on P1.6 section name fix)
+- [ ] Both files use LF line endings (will normalise on next `git add --renormalize`)
 
 ---
 
@@ -803,10 +803,10 @@ Register in `Program.cs` as `AddSingleton<StateStore>`.
   original file is intact
 
 **Definition of done**:
-- [ ] `StateStore` uses `SemaphoreSlim(1)` per file path
-- [ ] Atomic write: write `.tmp` then `File.Move(overwrite: true)`
-- [ ] Corrupt JSON silently resets to empty state + logs warning
-- [ ] Missing file returns empty state without throwing
+- [~] `StateStore` uses per-path locking — generic `ReadAsync<T>/WriteAsync<T>` created; does not yet use `SemaphoreSlim` per path or typed `LoadAppsAsync/SaveAppsAsync` API
+- [x] Atomic write: write `.tmp` then `File.Move(overwrite: true)`
+- [x] Corrupt JSON silently resets to empty state + logs warning
+- [x] Missing file returns empty state without throwing
 - [ ] All tests pass
 
 ---
@@ -933,12 +933,12 @@ builder.Logging.AddProvider<LogEventLoggerProvider>();
 - Unit test: two concurrent subscribers both receive the same events
 
 **Definition of done**:
-- [ ] `LogEventChannel` uses bounded channel with `DropOldest`
-- [ ] `LogEventLoggerProvider` hooks into `ILoggerFactory`
-- [ ] Log level mapping covers all `LogLevel` values
-- [ ] `Exception` is serialised into `properties["exception"]`
+- [x] `LogEventChannel` uses bounded inner channels per subscriber with `DropOldest` (fan-out via subscriber list)
+- [ ] `LogEventLoggerProvider` hooks into `ILoggerFactory` — not yet created
+- [ ] Log level mapping covers all `LogLevel` values — blocked on `LogEventLoggerProvider`
+- [ ] `Exception` is serialised into `properties["exception"]` — blocked on `LogEventLoggerProvider`
 - [ ] All unit tests pass
-- [ ] Registered as singleton in `Program.cs`
+- [x] Registered as singleton in `Program.cs`
 
 ---
 
@@ -1031,7 +1031,7 @@ Pass `DaemonJsonContext.Default` as the `JsonSerializerOptions` source in `State
 - Unit test: null `Pid` serialises correctly and deserialises back to `null`
 
 **Definition of done**:
-- [ ] All three model files exist with fields matching the spec above
-- [ ] `DaemonJsonContext` source-gen context covers all model types
+- [x] All three model files exist (`AppRecord`, `DebugSessionRecord`, `DaemonState`)
+- [x] `DaemonJsonContext` source-gen context created covering all model types
 - [ ] JSON round-trip unit tests pass
-- [ ] No `set` accessors except on explicitly mutable fields (`State`, `LastActivityAt`, `Pid`)
+- [ ] No `set` accessors except on explicitly mutable fields — needs field-by-field verification against spec

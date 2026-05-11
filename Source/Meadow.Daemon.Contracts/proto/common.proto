@@ -30,6 +30,7 @@ message DeviceInfo {
   string dotnet_version = 4;
   int64  uptime_seconds = 5;
   string machine_id    = 6; // /etc/machine-id
+  DaemonVersion daemon_version = 7;
 }
 
 // ─── Health ──────────────────────────────────────────────────────────────────
@@ -69,12 +70,12 @@ message VsdbgInfo {
 
 enum LogLevel {
   LOG_LEVEL_UNSPECIFIED = 0;
-  TRACE                 = 1;
-  DEBUG                 = 2;
-  INFORMATION           = 3;
-  WARNING               = 4;
-  ERROR                 = 5;
-  CRITICAL              = 6;
+  LOG_LEVEL_TRACE       = 1;
+  LOG_LEVEL_DEBUG       = 2;
+  LOG_LEVEL_INFO        = 3;
+  LOG_LEVEL_WARN        = 4;
+  LOG_LEVEL_ERROR       = 5;
+  LOG_LEVEL_FATAL       = 6;
 }
 
 message LogEvent {
@@ -88,4 +89,11 @@ message LogEvent {
 
 message StreamLogsRequest {
   LogLevel minimum_level = 1; // default: INFORMATION
+  string   filter_category = 2;
+}
+
+message StreamHealthRequest {}
+
+message GetDeviceInfoResponse {
+  DeviceInfo info = 1;
 }

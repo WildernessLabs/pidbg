@@ -1,11 +1,14 @@
 using System.Text.Json.Serialization;
-using Meadow.Daemon.Models;
 
 namespace Meadow.Daemon.Models;
 
+[JsonSerializable(typeof(AppsState))]
+[JsonSerializable(typeof(SessionsState))]
 [JsonSerializable(typeof(AppRecord))]
 [JsonSerializable(typeof(DebugSessionRecord))]
-[JsonSerializable(typeof(DaemonState))]
+[JsonSerializable(typeof(Meadow.Daemon.RestCompat.MeadowRestCompatController.HealthResponse))]
+[JsonSerializable(typeof(Meadow.Daemon.Contracts.V1.DeploymentManifest))]
+[JsonSerializable(typeof(Meadow.Daemon.Contracts.V1.DeploymentRecord))]
 [JsonSourceGenerationOptions(
     WriteIndented = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]

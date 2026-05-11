@@ -8,11 +8,11 @@ option csharp_namespace = "Meadow.Daemon.Contracts.V1";
 
 enum AppState {
   APP_STATE_UNSPECIFIED = 0;
-  STARTING              = 1;
-  RUNNING               = 2;
-  STOPPING              = 3;
-  STOPPED               = 4;
-  FAILED                = 5;
+  APP_STATE_STARTING    = 1;
+  APP_STATE_RUNNING     = 2;
+  APP_STATE_STOPPING    = 3;
+  APP_STATE_STOPPED     = 4;
+  APP_STATE_FAILED      = 5;
 }
 
 // ─── Application Status ──────────────────────────────────────────────────────
@@ -42,40 +42,40 @@ message OutputLine {
   int64        timestamp_ms = 3;
 }
 
-// ─── Start Application ───────────────────────────────────────────────────────
+// ─── Start Process ───────────────────────────────────────────────────────────
 
-message StartApplicationRequest {
+message StartProcessRequest {
   string app_name      = 1;
   bool   use_debug_slot = 2; // run from debug/ dir instead of active symlink
 }
 
-message StartApplicationResponse {
+message StartProcessResponse {
   bool   success       = 1;
   int32  pid           = 2;
   string error_message = 3;
 }
 
-// ─── Stop Application ────────────────────────────────────────────────────────
+// ─── Stop Process ────────────────────────────────────────────────────────────
 
-message StopApplicationRequest {
+message StopProcessRequest {
   string app_name            = 1;
   int32  grace_period_seconds = 2; // 0 = use daemon default
 }
 
-message StopApplicationResponse {
+message StopProcessResponse {
   bool   success       = 1;
   int32  exit_code     = 2;
   string error_message = 3;
 }
 
-// ─── Restart Application ─────────────────────────────────────────────────────
+// ─── Restart Process ─────────────────────────────────────────────────────────
 
-message RestartApplicationRequest {
+message RestartProcessRequest {
   string app_name       = 1;
   bool   use_debug_slot = 2;
 }
 
-message RestartApplicationResponse {
+message RestartProcessResponse {
   bool   success       = 1;
   int32  new_pid       = 2;
   string error_message = 3;
@@ -83,11 +83,11 @@ message RestartApplicationResponse {
 
 // ─── Get Status ──────────────────────────────────────────────────────────────
 
-message GetApplicationStatusRequest {
+message GetProcessStatusRequest {
   string app_name = 1;
 }
 
-message GetApplicationStatusResponse {
+message GetProcessStatusResponse {
   bool               found  = 1;
   ApplicationStatus  status = 2;
 }

@@ -1,44 +1,37 @@
-using System.Runtime.CompilerServices;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Threading.Channels;
 using Meadow.Daemon.Contracts.V1;
 
 namespace Meadow.Daemon.Services;
 
-// Phase 2 will upgrade this to a proper fan-out broadcast (list of inner channels).
-// For phase 1: single bounded channel sufficient for the skeleton.
-internal sealed class LogEventChannel
+public sealed class LogEventChannel : IAsyncDisposable
 {
-    private readonly List<Channel<LogEvent>> _subscribers = [];
-    private readonly object _lock = new();
-
-    public void Publish(LogEvent entry)
-    {
-        lock (_lock)
-        {
-            foreach (var ch in _subscribers)
-                ch.Writer.TryWrite(entry);
-        }
-    }
-
-    public async IAsyncEnumerable<LogEvent> Subscribe(
-        [EnumeratorCancellation] CancellationToken ct)
-    {
-        var ch = Channel.CreateBounded<LogEvent>(new BoundedChannelOptions(512)
+    // Bounded at 10,000 — if no subscriber is reading, events drop rather than OOM.
+    private readonly Channel<LogEvent> _channel =
+        Channel.CreateBounded<LogEvent>(new BoundedChannelOptions(10_000)
         {
             FullMode = BoundedChannelFullMode.DropOldest,
-            SingleWriter = true,
-            SingleReader = true,
+            SingleWriter = false,
+            SingleReader = false
         });
 
-        lock (_lock) _subscribers.Add(ch);
+    public bool TryWrite(LogEvent evt) => _channel.Writer.TryWrite(evt);
+
+    // Each call to Subscribe returns an independent async enumerable.
+    // Multiple gRPC stream calls each get their own cursor.
+    public IAsyncEnumerable<LogEvent> Subscribe(CancellationToken ct)
+        => _channel.Reader.ReadAllAsync(ct);
+
+    public async ValueTask DisposeAsync()
+    {
+        _channel.Writer.TryComplete();
+        // Drain remaining items so subscribers see a clean end
         try
         {
-            await foreach (var entry in ch.Reader.ReadAllAsync(ct))
-                yield return entry;
+            await foreach (var _ in _channel.Reader.ReadAllAsync()) { }
         }
-        finally
-        {
-            lock (_lock) _subscribers.Remove(ch);
-        }
+        catch (OperationCanceledException) { }
     }
 }

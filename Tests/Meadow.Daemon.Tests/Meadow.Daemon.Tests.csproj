@@ -4,11 +4,12 @@
     <TargetFramework>net9.0</TargetFramework>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <NoWarn>$(NoWarn);CA1707;CA1001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Reference contracts only; daemon exe targets linux-arm64 -->
     <ProjectReference Include="..\..\Source\Meadow.Daemon.Contracts\Meadow.Daemon.Contracts.csproj" />
+    <ProjectReference Include="..\..\Source\Meadow.Daemon\Meadow.Daemon.csproj" />
   </ItemGroup>
 
   <ItemGroup>

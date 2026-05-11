@@ -1,31 +1,46 @@
+using System.Reflection;
 using Microsoft.AspNetCore.Mvc;
-using Meadow.Daemon.Services;
 
 namespace Meadow.Daemon.RestCompat;
 
-// REST compatibility shim for tooling that predates the gRPC API.
-// Implemented in Phase 2 (P2.8).
 [ApiController]
-[Route("api")]
-internal sealed class MeadowRestCompatController : ControllerBase
+[Route("api/v1")]
+public sealed class MeadowRestCompatController : ControllerBase
 {
-    private readonly ProcessManager _processManager;
-    private readonly ILogger<MeadowRestCompatController> _log;
+    private readonly ILogger<MeadowRestCompatController> _logger;
 
-    public MeadowRestCompatController(ProcessManager processManager, ILogger<MeadowRestCompatController> log)
+    public MeadowRestCompatController(ILogger<MeadowRestCompatController> logger)
+        => _logger = logger;
+
+    // Health probe — used by scripts and existing tooling
+    [HttpGet("health")]
+    public IActionResult GetHealth()
+        => Ok(new HealthResponse { Status = "ok", Version = GetVersion() });
+
+    public sealed class HealthResponse
     {
-        _processManager = processManager;
-        _log = log;
+        public string Status { get; set; } = "";
+        public string Version { get; set; } = "";
     }
 
-    [HttpGet("health")]
-    public IActionResult GetHealth() => Ok(new { status = "ok" });
+    // App list stub — returns empty array, original API shape preserved
+    [HttpGet("apps")]
+    public IActionResult ListApps()
+        => Ok(Array.Empty<object>());
 
-    [HttpPost("app/{appName}/start")]
-    public Task<IActionResult> StartApp(string appName) =>
-        throw new NotImplementedException("Implemented in Phase 2");
+    // All write operations redirect to gRPC
+    [HttpPost("apps")]
+    [HttpDelete("apps/{name}")]
+    [HttpPost("apps/{name}/start")]
+    [HttpPost("apps/{name}/stop")]
+    public IActionResult GrpcOnly()
+        => StatusCode(501, new {
+            error = "Use gRPC API (port 50051). REST write operations are not supported.",
+            grpcService = "meadow.daemon.v1.MeadowDaemonService"
+        });
 
-    [HttpPost("app/{appName}/stop")]
-    public Task<IActionResult> StopApp(string appName) =>
-        throw new NotImplementedException("Implemented in Phase 2");
+    private static string GetVersion()
+        => Assembly.GetExecutingAssembly()
+                   .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+                   ?.InformationalVersion ?? "0.0.0";
 }

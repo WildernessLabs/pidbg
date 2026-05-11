@@ -17,6 +17,10 @@ message PrepareUpdateRequest {
   int64  size_bytes  = 3;
 }
 
+message PrepareUpdateChunk {
+  bytes data = 1;
+}
+
 message PrepareUpdateResponse {
   bool   ready        = 1;
   string upload_path  = 2; // absolute path to upload new binary via SFTP
@@ -47,25 +51,22 @@ service MeadowDaemonService {
   rpc GetHealth(PingRequest) returns (HealthStatus);
 
   // Server-side streaming: emits a HealthStatus every ~30s until client disconnects
-  rpc StreamHealth(PingRequest) returns (stream HealthStatus);
+  rpc StreamHealth(StreamHealthRequest) returns (stream HealthStatus);
 
   // Server-side streaming: emits LogEvents filtered by minimum level
   rpc StreamLogs(StreamLogsRequest) returns (stream LogEvent);
 
-  rpc GetDeviceInfo(GetDeviceInfoRequest) returns (DeviceInfo);
-
-  rpc GetDaemonVersion(PingRequest) returns (DaemonVersion);
+  rpc GetDeviceInfo(GetDeviceInfoRequest) returns (GetDeviceInfoResponse);
 
   // ── Process Lifecycle ──────────────────────────────────────────────────────
 
-  rpc StartApplication(StartApplicationRequest) returns (StartApplicationResponse);
+  rpc StartProcess(StartProcessRequest) returns (StartProcessResponse);
 
-  rpc StopApplication(StopApplicationRequest) returns (StopApplicationResponse);
+  rpc StopProcess(StopProcessRequest) returns (StopProcessResponse);
 
-  rpc RestartApplication(RestartApplicationRequest) returns (RestartApplicationResponse);
+  rpc RestartProcess(RestartProcessRequest) returns (RestartProcessResponse);
 
-  rpc GetApplicationStatus(GetApplicationStatusRequest)
-      returns (GetApplicationStatusResponse);
+  rpc GetProcessStatus(GetProcessStatusRequest) returns (GetProcessStatusResponse);
 
   rpc ListProcesses(ListProcessesRequest) returns (ListProcessesResponse);
 
@@ -102,10 +103,10 @@ service MeadowDaemonService {
   rpc GetVsdbgInfo(GetVsdbgInfoRequest) returns (GetVsdbgInfoResponse);
 
   // Download vsdbg from Microsoft CDN (requires internet on Pi)
-  rpc InstallVsdbg(InstallVsdbgRequest) returns (InstallVsdbgResponse);
+  rpc InstallVsdbg(InstallVsdbgRequest) returns (stream InstallVsdbgProgress);
 
   // Install vsdbg from pre-uploaded tarball (air-gapped devices)
-  rpc UploadVsdbgTarball(UploadVsdbgTarballRequest)
+  rpc UploadVsdbgTarball(stream UploadVsdbgTarballRequest)
       returns (UploadVsdbgTarballResponse);
 
   // ── Debug Sessions ─────────────────────────────────────────────────────────
@@ -122,7 +123,7 @@ service MeadowDaemonService {
   // ── Self-Update ────────────────────────────────────────────────────────────
 
   // Phase 1: prepare slot for new binary upload
-  rpc PrepareUpdate(PrepareUpdateRequest) returns (PrepareUpdateResponse);
+  rpc PrepareUpdate(stream PrepareUpdateChunk) returns (PrepareUpdateResponse);
 
   // Phase 2: verify, swap binary, exit (systemd restarts new version)
   rpc ApplyUpdate(ApplyUpdateRequest) returns (ApplyUpdateResponse);

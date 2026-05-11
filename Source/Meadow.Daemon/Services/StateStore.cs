@@ -1,50 +1,93 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Meadow.Daemon.Models;
 
 namespace Meadow.Daemon.Services;
 
-internal sealed class StateStore
+public sealed class StateStore
 {
-    private readonly string _root;
-    private readonly ILogger<StateStore> _log;
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
+    private readonly DaemonOptions _options;
+    private readonly ILogger<StateStore> _logger;
 
-    public StateStore(DaemonOptions opts, ILogger<StateStore> log)
+    public StateStore(IOptions<DaemonOptions> options, ILogger<StateStore> logger)
     {
-        _root = opts.StateRoot;
-        _log = log;
-        Directory.CreateDirectory(_root);
+        _options = options.Value;
+        _logger = logger;
     }
 
-    public async Task<T?> ReadAsync<T>(string key, CancellationToken ct = default) where T : class
+    public async Task<AppsState> LoadAppsAsync(CancellationToken ct = default)
     {
-        var path = FilePath(key);
-        if (!File.Exists(path)) return null;
+        var path = DaemonPaths.AppsStatePath(_options);
+        if (!File.Exists(path)) return new AppsState();
         try
         {
-            await using var fs = File.OpenRead(path);
-            return await JsonSerializer.DeserializeAsync<T>(fs, cancellationToken: ct);
+            await using var stream = File.OpenRead(path);
+            return await JsonSerializer.DeserializeAsync(stream, DaemonJsonContext.Default.AppsState, ct)
+                   ?? new AppsState();
         }
-        catch (Exception ex)
+        catch (JsonException ex)
         {
-            _log.LogWarning(ex, "Failed to read state key {Key}", key);
-            return null;
+            _logger.LogWarning(ex, "Apps state file {Path} is corrupt; resetting to empty", path);
+            return new AppsState();
         }
     }
 
-    public async Task WriteAsync<T>(string key, T value, CancellationToken ct = default) where T : class
+    public async Task SaveAppsAsync(AppsState state, CancellationToken ct = default)
     {
-        var path = FilePath(key);
-        var tmp = path + ".tmp";
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await using (var fs = File.Create(tmp))
-            await JsonSerializer.SerializeAsync(fs, value, cancellationToken: ct);
-        File.Move(tmp, path, overwrite: true); // atomic rename(2) on Linux
+        var path = DaemonPaths.AppsStatePath(_options);
+        var sem = _locks.GetOrAdd(path, _ => new SemaphoreSlim(1, 1));
+        await sem.WaitAsync(ct);
+        try
+        {
+            var tmp = path + ".tmp";
+            await using (var stream = File.Create(tmp))
+                await JsonSerializer.SerializeAsync(stream, state, DaemonJsonContext.Default.AppsState, ct);
+            
+            File.Move(tmp, path, overwrite: true);
+        }
+        finally
+        {
+            sem.Release();
+        }
     }
 
-    public Task DeleteAsync(string key, CancellationToken ct = default)
+    public async Task<SessionsState> LoadSessionsAsync(CancellationToken ct = default)
     {
-        File.Delete(FilePath(key));
-        return Task.CompletedTask;
+        var path = DaemonPaths.SessionsStatePath(_options);
+        if (!File.Exists(path)) return new SessionsState();
+        try
+        {
+            await using var stream = File.OpenRead(path);
+            return await JsonSerializer.DeserializeAsync(stream, DaemonJsonContext.Default.SessionsState, ct)
+                   ?? new SessionsState();
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "Sessions state file {Path} is corrupt; resetting to empty", path);
+            return new SessionsState();
+        }
     }
 
-    private string FilePath(string key) => Path.Combine(_root, key + ".json");
+    public async Task SaveSessionsAsync(SessionsState state, CancellationToken ct = default)
+    {
+        var path = DaemonPaths.SessionsStatePath(_options);
+        var sem = _locks.GetOrAdd(path, _ => new SemaphoreSlim(1, 1));
+        await sem.WaitAsync(ct);
+        try
+        {
+            var tmp = path + ".tmp";
+            await using (var stream = File.Create(tmp))
+                await JsonSerializer.SerializeAsync(stream, state, DaemonJsonContext.Default.SessionsState, ct);
+            
+            File.Move(tmp, path, overwrite: true);
+        }
+        finally
+        {
+            sem.Release();
+        }
+    }
 }

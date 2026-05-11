@@ -17,11 +17,11 @@
 
   <ItemGroup>
     <!-- Server stubs: included in daemon; client stubs: included in VSIX and client lib -->
-    <Protobuf Include="proto\common.proto"         GrpcServices="Both" />
-    <Protobuf Include="proto\deployment.proto"     GrpcServices="Both" />
-    <Protobuf Include="proto\process.proto"        GrpcServices="Both" />
-    <Protobuf Include="proto\session.proto"        GrpcServices="Both" />
-    <Protobuf Include="proto\meadow_daemon.proto"  GrpcServices="Both" />
+    <Protobuf Include="proto\common.proto"         ProtoRoot="proto" GrpcServices="Both" />
+    <Protobuf Include="proto\deployment.proto"     ProtoRoot="proto" GrpcServices="Both" />
+    <Protobuf Include="proto\process.proto"        ProtoRoot="proto" GrpcServices="Both" />
+    <Protobuf Include="proto\session.proto"        ProtoRoot="proto" GrpcServices="Both" />
+    <Protobuf Include="proto\meadow_daemon.proto"  ProtoRoot="proto" GrpcServices="Both" />
   </ItemGroup>
 
 </Project>

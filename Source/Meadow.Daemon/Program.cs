@@ -1,8 +1,10 @@
+using System.Reflection;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.Extensions.Options;
+using Meadow.Daemon;
 using Meadow.Daemon.GrpcService;
 using Meadow.Daemon.Services;
-using Meadow.Daemon.Contracts.V1;
-using Microsoft.AspNetCore.Server.Kestrel.Core;
-using System.Net;
+using Meadow.Daemon.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,68 +13,43 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Configuration
     .AddJsonFile("appsettings.json", optional: false)
     .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
-    .AddJsonFile("/etc/meadow/daemon.conf", optional: true)
-    .AddEnvironmentVariables("MEADOW_");
+    .AddJsonFile("/etc/meadow/daemon.conf", optional: true, reloadOnChange: false)
+    .AddEnvironmentVariables(prefix: "MEADOW_");
 
-var daemonOpts = builder.Configuration
-    .GetSection("Meadow")
-    .Get<DaemonOptions>() ?? new DaemonOptions();
+// ── Options ──────────────────────────────────────────────────────────────────
 
-builder.Services.AddSingleton(daemonOpts);
+builder.Services
+    .AddOptions<DaemonOptions>()
+    .BindConfiguration(DaemonOptions.Section)
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
-// ── Kestrel ──────────────────────────────────────────────────────────────────
+// ── Logging ───────────────────────────────────────────────────────────────────
 
-builder.WebHost.ConfigureKestrel(kestrel =>
+builder.Logging.ClearProviders();
+builder.Logging.AddJsonConsole(o =>
 {
-    kestrel.Listen(IPAddress.Loopback, daemonOpts.GrpcPort, o =>
-        o.Protocols = HttpProtocols.Http2);
-
-    kestrel.Listen(IPAddress.Loopback, daemonOpts.RestPort, o =>
-        o.Protocols = HttpProtocols.Http1);
+    o.IncludeScopes = true;
+    o.TimestampFormat = "yyyy-MM-ddTHH:mm:ss.fffZ ";
+    o.UseUtcTimestamp = true;
 });
+
+builder.Services.AddSingleton<LogEventChannel>();
+builder.Logging.Services.AddSingleton<ILoggerProvider, LogEventLoggerProvider>();
 
 // ── systemd ───────────────────────────────────────────────────────────────────
 
 builder.Host.UseSystemd();
 
-// ── Logging ───────────────────────────────────────────────────────────────────
-
-builder.Logging.ClearProviders();
-builder.Logging.AddJsonConsole(opts =>
-{
-    opts.IncludeScopes = true;
-    opts.TimestampFormat = "O";
-    opts.UseUtcTimestamp = true;
-    opts.JsonWriterOptions = new System.Text.Json.JsonWriterOptions { Indented = false };
-});
-
 // ── Services ─────────────────────────────────────────────────────────────────
 
-builder.Services
-    .AddGrpc()
-    .AddServiceOptions<MeadowDaemonGrpcService>(opts =>
-    {
-        opts.MaxReceiveMessageSize = 64 * 1024 * 1024;
-        opts.MaxSendMessageSize    = 64 * 1024 * 1024;
-    });
-
-builder.Services.AddGrpcHealthChecks();
-builder.Services.AddControllers();
-
-// Infrastructure
-builder.Services.AddSingleton<LogEventChannel>();
+// Domain services (some are placeholders for later phases)
 builder.Services.AddSingleton<StateStore>();
-
-// Deployment pipeline (Phase 3)
 builder.Services.AddSingleton<VersionStore>();
 builder.Services.AddSingleton<StagingController>();
 builder.Services.AddSingleton<ManifestVerifier>();
-builder.Services.AddSingleton<DeploymentManager>();
-
-// Process management (Phase 5)
+builder.Services.AddSingleton<IDeploymentManager, DeploymentManager>();
 builder.Services.AddSingleton<ProcessManager>();
-
-// vsdbg management (Phase 5)
 builder.Services.AddSingleton<VsdbgInstaller>();
 builder.Services.AddSingleton<VsdbgManager>();
 builder.Services.AddSingleton<VsdbgLauncher>();
@@ -83,12 +60,76 @@ builder.Services.AddHostedService<ProcessMonitorService>();
 builder.Services.AddHostedService<HealthReporterService>();
 builder.Services.AddHostedService<OtaUpdateService>();
 
-// ── Build ─────────────────────────────────────────────────────────────────────
+// gRPC
+builder.Services.AddGrpc(o =>
+{
+    o.EnableDetailedErrors = builder.Environment.IsDevelopment();
+    o.MaxReceiveMessageSize = 64 * 1024 * 1024;  // 64 MB for binary uploads
+    o.MaxSendMessageSize    = 64 * 1024 * 1024;
+});
+builder.Services.AddGrpcReflection();
+builder.Services.AddGrpcHealthChecks();
+builder.Services.AddHealthChecks()
+    .AddCheck<DaemonHealthCheck>("daemon");
+
+builder.Services.Configure<Grpc.AspNetCore.HealthChecks.GrpcHealthChecksOptions>(o =>
+{
+    o.Services.Map("meadow.daemon.v1.MeadowDaemonService", r => r.Name == "daemon");
+});
+
+// REST (compat)
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.TypeInfoResolverChain.Insert(0, DaemonJsonContext.Default);
+    });
+
+// ── Kestrel ──────────────────────────────────────────────────────────────────
+
+builder.WebHost.ConfigureKestrel((ctx, opts) =>
+{
+    var daemon = ctx.Configuration.GetSection(DaemonOptions.Section);
+    var grpcPort = daemon.GetValue<int>("GrpcPort", 50051);
+    var restPort = daemon.GetValue<int>("RestPort", 5000);
+
+    // gRPC endpoint: HTTP/2 only, no TLS (SSH tunnel provides encryption)
+    opts.ListenLocalhost(grpcPort, lo =>
+    {
+        lo.Protocols = HttpProtocols.Http2;
+    });
+
+    // REST compat endpoint: HTTP/1.1 only
+    opts.ListenLocalhost(restPort, lo =>
+    {
+        lo.Protocols = HttpProtocols.Http1;
+    });
+});
 
 var app = builder.Build();
 
+// Ensure directories exist before any service starts
+var daemonOptions = app.Services.GetRequiredService<IOptions<DaemonOptions>>().Value;
+DaemonPaths.EnsureDirectories(daemonOptions);
+
+// ── Middleware ────────────────────────────────────────────────────────────────
+
 app.MapGrpcService<MeadowDaemonGrpcService>();
 app.MapGrpcHealthChecksService();
+app.MapHealthChecks("/health");
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapGrpcReflectionService();
+}
+
 app.MapControllers();
+
+var logger = app.Services.GetRequiredService<ILogger<Program>>();
+var version = Assembly.GetExecutingAssembly()
+                      .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+                      ?.InformationalVersion ?? "1.0.0";
+
+logger.LogInformation("Meadow Daemon {Version} starting on gRPC:{GrpcPort} REST:{RestPort}",
+    version, daemonOptions.GrpcPort, daemonOptions.RestPort);
 
 app.Run();
