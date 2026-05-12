@@ -1,0 +1,55 @@
+<Window x:Class="PiDbg.UI.ConnectDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Connect to Raspberry Pi"
+        SizeToContent="WidthAndHeight"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        MinWidth="380">
+    <Grid Margin="16,12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="110"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <Label Grid.Row="0" Grid.Column="0" Content="_Host:" Margin="0,4"
+               Target="{Binding ElementName=HostBox}" VerticalAlignment="Center"/>
+        <TextBox x:Name="HostBox" Grid.Row="0" Grid.Column="1" Margin="0,4"
+                 ToolTip="Hostname or IP address of the Raspberry Pi"/>
+
+        <Label Grid.Row="1" Grid.Column="0" Content="_Port:" Margin="0,4"
+               Target="{Binding ElementName=PortBox}" VerticalAlignment="Center"/>
+        <TextBox x:Name="PortBox" Grid.Row="1" Grid.Column="1" Margin="0,4"
+                 Text="22" MaxLength="5"/>
+
+        <Label Grid.Row="2" Grid.Column="0" Content="_User:" Margin="0,4"
+               Target="{Binding ElementName=UserBox}" VerticalAlignment="Center"/>
+        <TextBox x:Name="UserBox" Grid.Row="2" Grid.Column="1" Margin="0,4" Text="pi"/>
+
+        <Label Grid.Row="3" Grid.Column="0" Content="Pass_word:" Margin="0,4"
+               Target="{Binding ElementName=PasswordBox}" VerticalAlignment="Center"/>
+        <PasswordBox x:Name="PasswordBox" Grid.Row="3" Grid.Column="1" Margin="0,4"
+                     ToolTip="Used once to install SSH key; key-based auth is used afterwards"/>
+
+        <CheckBox x:Name="RememberCheck" Grid.Row="4" Grid.ColumnSpan="2"
+                  Margin="0,4" IsChecked="True"
+                  Content="_Remember connection settings (host, user, port)"/>
+
+        <StackPanel Grid.Row="6" Grid.ColumnSpan="2"
+                    Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="_Connect" Width="80" Margin="0,0,8,0"
+                    IsDefault="True" Click="OnConnect"/>
+            <Button Content="Cancel" Width="80" IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</Window>

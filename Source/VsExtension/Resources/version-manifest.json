@@ -1,0 +1,10 @@
+{
+  "vsixVersion":       "1.0.0",
+  "requiredDaemonMin": "1.0.0",
+  "requiredDaemonMax": "1.99.99",
+  "preferredDaemon":   "1.0.0",
+  "requiredVsdbgMin":  "17.0.0",
+  "preferredVsdbg":    "17.12.11230",
+  "protoVersion":      1,
+  "minProtoVersion":   1
+}

@@ -51,6 +51,7 @@ public class GrpcServiceTests
 
         _processManagerMock = new Mock<ProcessManager>(
             _deploymentManagerMock.Object,
+            _stateStore,
             _optionsMock.Object, 
             new Mock<ILogger<ProcessManager>>().Object);
 
@@ -71,6 +72,7 @@ public class GrpcServiceTests
             _lifetimeMock.Object,
             _deploymentManagerMock.Object,
             _processManagerMock.Object,
+            vsdbgInstallerMock.Object,
             _vsdbgManagerMock.Object,
             _debugSessionManagerMock.Object);
     }

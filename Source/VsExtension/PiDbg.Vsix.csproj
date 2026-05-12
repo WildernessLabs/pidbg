@@ -6,6 +6,8 @@
     <RootNamespace>PiDbg</RootNamespace>
     <AssemblyName>PiDbg.Vsix</AssemblyName>
 
+    <UseWPF>true</UseWPF>
+
     <!-- VSIX packaging -->
     <VSSDKBuildToolsAutoSetup>true</VSSDKBuildToolsAutoSetup>
     <GeneratePkgDefFile>true</GeneratePkgDefFile>
@@ -34,6 +36,8 @@
     <PackageReference Include="Microsoft.VisualStudio.Interop" />
     <PackageReference Include="Microsoft.VisualStudio.ImageCatalog" />
     <PackageReference Include="Microsoft.VisualStudio.ProjectSystem" />
+    <PackageReference Include="Microsoft.VisualStudio.ProjectSystem.VS" />
+    <PackageReference Include="Microsoft.VisualStudio.ProjectSystem.SDK" />
 
     <!-- SSH / gRPC -->
     <PackageReference Include="SSH.NET" />
@@ -52,6 +56,19 @@
     <None Include="source.extension.vsixmanifest">
       <SubType>Designer</SubType>
     </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\detect.sh" />
+    <EmbeddedResource Include="Resources\version-manifest.json" />
+    <EmbeddedResource Include="Resources\meadow-daemon.service.template" />
+    <!-- Conditional: daemon binary and vsdbg tarball are not bundled in dev builds -->
+    <EmbeddedResource Condition="Exists('Resources\meadow-daemon')"
+                      Include="Resources\meadow-daemon" />
+    <EmbeddedResource Condition="Exists('Resources\vsdbg-linux-arm64.tar.gz')"
+                      Include="Resources\vsdbg-linux-arm64.tar.gz" />
+    <EmbeddedResource Condition="Exists('Resources\vsdbg-linux-arm64.tar.gz.sha256')"
+                      Include="Resources\vsdbg-linux-arm64.tar.gz.sha256" />
   </ItemGroup>
 
 </Project>

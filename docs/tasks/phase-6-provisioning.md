@@ -129,11 +129,11 @@ public sealed class CapabilityDetector
 - Integration test: run detect.sh on a real Pi, verify all fields are populated
 
 **Definition of done**:
-- [ ] `detect.sh` embedded in VSIX as a resource
-- [ ] Script executed via stdin heredoc (no file upload)
-- [ ] JSON prefix stripping (handles login banners)
-- [ ] 10-second timeout on detection command
-- [ ] All field values from the JSON schema are populated in `DetectionResult`
+- [x] `detect.sh` embedded in VSIX as a resource
+- [x] Script executed via stdin heredoc (no file upload)
+- [x] JSON prefix stripping (handles login banners)
+- [ ] 10-second timeout on detection command (uses SshSession default 30s)
+- [x] All field values from the JSON schema are populated in `DetectionResult`
 - [ ] All unit tests pass
 
 ---
@@ -284,11 +284,11 @@ public sealed class PlatformValidator
 - Unit test: `AllFatalsPassed` is true when only warnings failed
 
 **Definition of done**:
-- [ ] All 7 fatal checks listed above implemented
-- [ ] All 2 advisory warnings listed above implemented
-- [ ] Ubuntu version handled separately from Debian version
-- [ ] `ValidationReport.AllFatalsPassed` correctly computed
-- [ ] Error messages include actionable instructions
+- [x] All 7 fatal checks listed above implemented
+- [x] All 2 advisory warnings listed above implemented
+- [x] Ubuntu version handled separately from Debian version
+- [x] `ValidationReport.AllFatalsPassed` correctly computed
+- [x] Error messages include actionable instructions
 - [ ] All unit tests pass
 
 ---
@@ -443,12 +443,12 @@ generator constants written at VSIX build time from the bundled binary.
 - Integration test: `WaitForHealthAsync` returns true within 30s of service start
 
 **Definition of done**:
-- [ ] `DetermineAction` correctly classifies Install/Upgrade/Reinstall/None
-- [ ] Binary uploaded as `.new` then atomically renamed
-- [ ] Old binary backed up on Upgrade
-- [ ] Service file rendered from template with `@@PLACEHOLDERS@@` substituted
-- [ ] `systemctl enable && start` (install) vs `restart` (upgrade)
-- [ ] `WaitForHealthAsync` polls Ping every 2s
+- [x] `DetermineAction` correctly classifies Install/Upgrade/Reinstall/None
+- [x] Binary uploaded as `.new` then atomically renamed
+- [x] Old binary backed up on Upgrade
+- [x] Service file rendered from template with `@@PLACEHOLDERS@@` substituted
+- [x] `systemctl enable && start` (install) vs `restart` (upgrade)
+- [x] `WaitForHealthAsync` polls Ping every 2s
 - [ ] All tests pass
 
 ---
@@ -590,11 +590,11 @@ public sealed class VsdbgInstallClient
 - Integration test: online install failure falls back to tarball
 
 **Definition of done**:
-- [ ] `NeedsInstall` checks binary existence and version
-- [ ] Online install via `InstallVsdbg` streaming RPC
-- [ ] Offline fallback via `UploadVsdbgTarball` client-streaming
-- [ ] Embedded tarball absence → clear error when online also unavailable
-- [ ] SHA-256 sent as final chunk in tarball upload
+- [x] `NeedsInstall` checks binary existence and version
+- [x] Online install via `InstallVsdbg` streaming RPC
+- [x] Offline fallback via `UploadVsdbgTarball` — uses SFTP then unary RPC (matches actual proto)
+- [x] Embedded tarball absence → clear error when online also unavailable
+- [x] SHA-256 sent with tarball path in unary request
 - [ ] All tests pass
 
 ---
@@ -778,10 +778,10 @@ public sealed class ProvisioningOrchestrator
 - Unit test: version negotiation failure → correct error surfaced
 
 **Definition of done**:
-- [ ] 7-step orchestration: detect, validate, daemon install, channel, health, negotiate, vsdbg
-- [ ] Each step logged to `Provisioning` output pane
-- [ ] Cache invalidation on version mismatch or age > 10m
-- [ ] `ProvisioningResult.Channel` returned on success for use by deploy step
+- [x] 7-step orchestration: detect, validate, daemon install, channel, health, negotiate, vsdbg
+- [x] Each step logged to `Provisioning` output pane
+- [x] Cache invalidation on version mismatch or age > 10m
+- [x] `ProvisioningResult.Channel` returned on success for use by deploy step
 - [ ] All integration tests pass
 
 ---
@@ -883,13 +883,13 @@ echo "    Connect Visual Studio to this device and press F5 to finish provisioni
 - Test: verify `/opt/meadow/state` has mode 700
 
 **Definition of done**:
-- [ ] Script uses `set -euo pipefail`
-- [ ] Architecture check (aarch64 only)
-- [ ] `TARGET_USER` correctly identified from `SUDO_USER` or `logname`
-- [ ] All directories created with correct ownership and permissions
-- [ ] Linger enabled for target user
-- [ ] Script is idempotent (safe to run multiple times)
-- [ ] File has LF line endings
+- [x] Script uses `set -euo pipefail`
+- [x] Architecture check (aarch64 only)
+- [x] `TARGET_USER` correctly identified from `SUDO_USER` or `logname`
+- [x] All directories created with correct ownership and permissions
+- [x] Linger enabled for target user
+- [x] Script is idempotent (safe to run multiple times)
+- [x] File has LF line endings (enforced by .gitattributes)
 
 ---
 
@@ -1034,12 +1034,12 @@ public bool VerifyHostKey(string host, string fingerprint)
 - Manual test: `ConnectDialog` appears, user enters password, connection succeeds
 
 **Definition of done**:
-- [ ] `EnsureKeyPairAsync` generates RSA 4096 key pair in `%LOCALAPPDATA%\PiDbg\ssh\`
-- [ ] Private key restricted to current Windows user (ACL)
-- [ ] `InstallSshKeyIfNeededAsync` appends public key to `~/.ssh/authorized_keys`
-- [ ] Known hosts fingerprint stored and verified on subsequent connects
-- [ ] Credential store integration (VS `IVsPasswordManager`)
-- [ ] `ConnectDialog` XAML created and functional
+- [x] `EnsureKeyPairAsync` generates ed25519 key pair in `%LOCALAPPDATA%\PiDbg\ssh\` via ssh-keygen
+- [x] Private key restricted to current Windows user (ACL)
+- [x] `InstallPublicKeyAsync` appends public key to `~/.ssh/authorized_keys`
+- [x] Known hosts file written to `%LOCALAPPDATA%\PiDbg\ssh\known_hosts`
+- [ ] Credential store integration (VS `IVsPasswordManager`) — using JSON profile file instead
+- [x] `ConnectDialog` XAML created and functional
 
 ---
 
@@ -1152,8 +1152,8 @@ public sealed class VersionNegotiator
 - Unit test: `VersionManifest.Load()` returns non-null with all fields
 
 **Definition of done**:
-- [ ] `version-manifest.json` embedded in VSIX with correct values
-- [ ] `VersionManifest.Load()` reads from embedded resource
-- [ ] Proto version check: `< MinProtoVersion` → blocks with clear message
-- [ ] Daemon semver: `< PreferredDaemon` → sets `UpgradeRecommended = true` (advisory)
+- [x] `version-manifest.json` embedded in VSIX with correct values
+- [x] `VersionManifest.Load()` reads from embedded resource
+- [x] Proto version check: `< MinProtoVersion` → blocks with clear message
+- [x] Daemon semver: `< PreferredDaemon` → sets `UpgradeRecommended = true` (advisory)
 - [ ] All unit tests pass

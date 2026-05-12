@@ -1,28 +1,65 @@
+using System;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Text;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using PiDbg.Infrastructure;
 
 namespace PiDbg.Provisioning;
 
-// Executes the detect.sh heredoc over SSH and parses the JSON capability report.
-// Implemented in Phase 6 (P6.1).
-internal sealed class CapabilityDetector
+internal static class CapabilityDetector
 {
-    private readonly SshConnectionManager _ssh;
+    private static readonly string DetectScript = LoadEmbeddedScript();
+    private static readonly JsonSerializerOptions JsonOpts =
+        new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
 
-    public CapabilityDetector(SshConnectionManager ssh) => _ssh = ssh;
+    public static async Task<DetectionResult> DetectAsync(SshSession session, CancellationToken ct)
+    {
+        // Inject script via stdin heredoc — avoids a temporary SFTP file upload
+        var heredoc = $"bash -s <<'DETECT_SCRIPT'\n{DetectScript}\nDETECT_SCRIPT";
+        var (_, stdout, stderr) = await session.ExecuteAsync(heredoc, ct).ConfigureAwait(false);
 
-    public Task<CapabilityReport> DetectAsync(CancellationToken ct)
-        => throw new NotImplementedException("Implemented in Phase 6");
-}
+        if (string.IsNullOrWhiteSpace(stdout))
+            throw new ProvisioningException(
+                "Capability detection returned no output. " +
+                $"Stderr: {Truncate(stderr, 300)}");
 
-internal sealed class CapabilityReport
-{
-    public bool DaemonInstalled { get; set; }
-    public string? DaemonVersion { get; set; }
-    public bool DaemonRunning { get; set; }
-    public bool VsdbgInstalled { get; set; }
-    public string? VsdbgVersion { get; set; }
-    public string? Architecture { get; set; }
-    public string? DotnetVersion { get; set; }
-    public bool SystemdAvailable { get; set; }
-    public bool SudoAvailable { get; set; }
+        // Strip SSH login banners by finding the first '{' on stdout
+        var jsonStart = stdout.IndexOf('{');
+        if (jsonStart < 0)
+            throw new ProvisioningException(
+                $"Detection returned no JSON.\nOutput was: {Truncate(stdout, 200)}");
+
+        var json = stdout.Substring(jsonStart);
+
+        try
+        {
+            var result = JsonSerializer.Deserialize<DetectionResult>(json, JsonOpts);
+            return result ?? throw new ProvisioningException("Detection returned null JSON");
+        }
+        catch (JsonException ex)
+        {
+            throw new ProvisioningException(
+                $"Detection returned invalid JSON: {ex.Message}\n" +
+                $"Output was: {Truncate(json, 200)}");
+        }
+    }
+
+    private static string LoadEmbeddedScript()
+    {
+        var asm  = Assembly.GetExecutingAssembly();
+        var name = asm.GetManifestResourceNames()
+            .FirstOrDefault(n => n.EndsWith("detect.sh", StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException(
+                "detect.sh not found as an embedded resource in the VSIX assembly.");
+        using var stream = asm.GetManifestResourceStream(name)!;
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        return reader.ReadToEnd();
+    }
+
+    private static string Truncate(string s, int max) =>
+        s.Length <= max ? s : s.Substring(0, max) + "...";
 }

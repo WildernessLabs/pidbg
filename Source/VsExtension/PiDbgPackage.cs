@@ -1,8 +1,10 @@
+using System.Runtime.InteropServices;
+
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
+
 using PiDbg.Commands;
 using PiDbg.Infrastructure;
-using System.Runtime.InteropServices;
 
 namespace PiDbg;
 
@@ -14,10 +16,10 @@ namespace PiDbg;
 public sealed class PiDbgPackage : AsyncPackage
 {
     protected override async Task InitializeAsync(
-        CancellationToken ct, IProgress<ServiceProgressData> progress)
+        CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
     {
-        await base.InitializeAsync(ct, progress);
-        await JoinableTaskFactory.SwitchToMainThreadAsync(ct);
+        await base.InitializeAsync(cancellationToken, progress);
+        await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
 
         await OutputPaneManager.InitializeAsync(this);
         await ConnectCommand.InitializeAsync(this);

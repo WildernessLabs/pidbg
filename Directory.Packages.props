@@ -27,6 +27,9 @@
     <PackageVersion Include="Microsoft.VisualStudio.Interop" Version="17.14.40260" />
     <PackageVersion Include="Microsoft.VisualStudio.ImageCatalog" Version="17.14.40260" />
     <PackageVersion Include="Microsoft.VisualStudio.ProjectSystem" Version="17.9.380" />
+    <PackageVersion Include="Microsoft.VisualStudio.ProjectSystem.VS" Version="17.9.380" />
+    <PackageVersion Include="Microsoft.VisualStudio.ProjectSystem.SDK" Version="17.9.380" />
+    <PackageVersion Include="Microsoft.VisualStudio.ProjectSystem.Managed" Version="17.12.215" />
     <PackageVersion Include="Microsoft.VisualStudio.LanguageServices" Version="17.14.36752" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.5.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />

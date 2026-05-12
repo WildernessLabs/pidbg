@@ -210,6 +210,9 @@ internal sealed class MeadowDaemonGrpcService : MeadowDaemonService.MeadowDaemon
 
         await foreach (var line in broadcaster.Subscribe(ct))
         {
+            if (request.Stream != OutputStream.Combined && line.Stream != request.Stream)
+                continue;
+
             try { await responseStream.WriteAsync(line, ct); }
             catch (OperationCanceledException) { break; }
             catch { break; }

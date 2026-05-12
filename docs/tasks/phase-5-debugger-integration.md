@@ -180,11 +180,11 @@ public sealed class ProcessManager : IProcessManager, IDisposable
 - Unit test: `OnProcessExited` sets state to `Stopped`
 
 **Definition of done**:
-- [ ] `StartAsync` launches `dotnet {entryPoint}` with working dir, env vars, args
-- [ ] stdout/stderr captured and forwarded to `ProcessOutputBroadcaster`
-- [ ] `StopAsync` sends SIGTERM, waits `ProcessGracefulStopTimeout`, then SIGKILL
-- [ ] PID persisted to `StateStore` on start
-- [ ] `AppState` transitions: `Stopped → Starting → Running → Stopping → Stopped`
+- [x] `StartAsync` launches `dotnet {entryPoint}` with working dir, env vars, args
+- [x] stdout/stderr captured and forwarded to `ProcessOutputBroadcaster`
+- [x] `StopAsync` sends SIGTERM, waits `ProcessGracefulStopTimeout`, then SIGKILL
+- [x] PID persisted to `StateStore` on start
+- [x] `AppState` transitions: `Stopped → Starting → Running → Stopping → Stopped`
 - [ ] All tests pass
 
 ---
@@ -307,10 +307,10 @@ public sealed class ProcessOutputBroadcaster : IDisposable
 - Unit test: 2001 lines written → oldest 1 line dropped (bounded at 2000)
 
 **Definition of done**:
-- [ ] Per-subscriber `Channel<OutputLine>` with capacity 500
-- [ ] `TryWrite` fans out to all subscribers without blocking
-- [ ] Subscriber removal on `CancellationToken` cancellation
-- [ ] `Dispose` completes all subscriber channels
+- [x] Per-subscriber `Channel<OutputLine>` with capacity 500
+- [x] `TryWrite` fans out to all subscribers without blocking
+- [x] Subscriber removal on `CancellationToken` cancellation
+- [x] `Dispose` completes all subscriber channels
 - [ ] Unit tests pass
 
 ---
@@ -566,9 +566,9 @@ public override async Task StreamOutput(
 - Integration test: `StopProcess` stops a running app
 
 **Definition of done**:
-- [ ] All 6 process RPCs implemented (Start, Stop, Restart, GetStatus, List, StreamOutput)
-- [ ] `StreamOutput` filters by stdout/stderr/combined
-- [ ] `ValidateAppName` called for all RPCs
+- [x] All 6 process RPCs implemented (Start, Stop, Restart, GetStatus, List, StreamOutput)
+- [ ] `StreamOutput` filters by stdout/stderr/combined — **BUG: not filtering (Gemini omitted)**
+- [x] `ValidateAppName` called for all RPCs
 - [ ] All integration tests pass
 
 ---
@@ -872,12 +872,12 @@ public sealed class VsdbgLauncher
 - Integration test (Linux): timeout correctly thrown when port never binds
 
 **Definition of done**:
-- [ ] Launches `vsdbg-ui --server --port N [--attach PID]`
-- [ ] Polls `/proc/net/tcp6` every 250ms for LISTEN state
-- [ ] Checks both `/proc/net/tcp` and `/proc/net/tcp6`
-- [ ] 10-second timeout for vsdbg to bind
-- [ ] vsdbg stderr captured for diagnostics
-- [ ] `AllocatePort` finds next free port in configured range
+- [x] Launches `vsdbg-ui --server --port N [--attach PID]`
+- [x] Polls `/proc/net/tcp6` every 250ms for LISTEN state
+- [x] Checks both `/proc/net/tcp` and `/proc/net/tcp6`
+- [x] 10-second timeout for vsdbg to bind
+- [x] vsdbg stderr captured for diagnostics
+- [x] `AllocatePort` finds next free port in configured range
 - [ ] All tests pass
 
 ---
@@ -1012,10 +1012,10 @@ public sealed class DebugSessionManager : IDebugSessionManager
 - Unit test: missing app → `InvalidOperationException`
 
 **Definition of done**:
-- [ ] Starts vsdbg in `--attach PID` mode (Attach) or plain `--server --port N` (Launch)
-- [ ] Session record persisted to `sessions.json`
-- [ ] `StopDebugSessionAsync` kills vsdbg process
-- [ ] `TouchSessionAsync` resets orphan timeout
+- [x] Starts vsdbg in `--attach PID` mode (Attach) or plain `--server --port N` (Launch)
+- [x] Session record persisted to `sessions.json`
+- [x] `StopDebugSessionAsync` kills vsdbg process
+- [x] `TouchSessionAsync` resets orphan timeout
 - [ ] All integration tests pass
 
 ---
@@ -1125,11 +1125,11 @@ public override async Task<UploadVsdbgTarballResponse> UploadVsdbgTarball(
 - Integration test: `StopDebugSession` kills vsdbg
 
 **Definition of done**:
-- [ ] All 7 session/vsdbg RPCs implemented
-- [ ] `GetSessionStatus` calls `TouchSessionAsync` on every call
-- [ ] `InstallVsdbg` progress streamed back to caller
-- [ ] `UploadVsdbgTarball` chunks assembled and passed to `InstallFromTarballAsync`
-- [ ] `NotFound` returned for unknown session IDs
+- [x] All 7 session/vsdbg RPCs implemented
+- [x] `GetSessionStatus` calls `TouchSessionAsync` on every call
+- [x] `InstallVsdbg` progress streamed back to caller
+- [ ] `UploadVsdbgTarball` chunks assembled — **NOTE: proto is unary (SFTP path), Gemini used file path; matches actual proto design**
+- [x] `NotFound` returned for unknown session IDs
 - [ ] All integration tests pass
 
 ---
@@ -1367,9 +1367,9 @@ Tunnel lifetime management:
 - Integration test: keep-alive packets verified in SSH server logs
 
 **Definition of done**:
-- [ ] `OpenDebugTunnelAsync` uses `ForwardedPortLocal` with port 0
-- [ ] Returns OS-assigned local port (non-zero)
-- [ ] Keep-alive interval set to 30s
-- [ ] Tunnel tracked by local port, closed individually or all at once
-- [ ] `Dispose` closes all open tunnels
+- [x] `OpenDebugTunnelAsync` uses `ForwardedPortLocal` with port 0
+- [x] Returns OS-assigned local port (non-zero)
+- [x] Keep-alive interval set to 30s
+- [x] Tunnel tracked by local port, closed individually or all at once
+- [x] `Dispose` closes all open tunnels
 - [ ] Registered in `PiDbgPackage` for cleanup on VS close

@@ -34,6 +34,7 @@ enum OutputStream {
   OUTPUT_STREAM_UNSPECIFIED = 0;
   STDOUT                    = 1;
   STDERR                    = 2;
+  COMBINED                  = 3;
 }
 
 message OutputLine {
@@ -104,4 +105,5 @@ message ListProcessesResponse {
 
 message StreamOutputRequest {
   string app_name = 1;
+  OutputStream stream = 2;
 }
