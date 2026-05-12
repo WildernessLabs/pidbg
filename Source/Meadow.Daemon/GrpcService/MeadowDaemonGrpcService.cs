@@ -18,9 +18,10 @@ internal sealed class MeadowDaemonGrpcService : MeadowDaemonService.MeadowDaemon
     private readonly IHostApplicationLifetime _lifetime;
 
     private readonly IDeploymentManager _deploymentManager;
-    private readonly ProcessManager _processManager;
+    private readonly IProcessManager _processManager;
+    private readonly IVsdbgInstaller _vsdbgInstaller;
     private readonly VsdbgManager _vsdbgManager;
-    private readonly DebugSessionManager _debugSessionManager;
+    private readonly IDebugSessionManager _sessionManager;
 
     public MeadowDaemonGrpcService(
         IOptions<DaemonOptions> options,
@@ -29,9 +30,10 @@ internal sealed class MeadowDaemonGrpcService : MeadowDaemonService.MeadowDaemon
         ILogger<MeadowDaemonGrpcService> logger,
         IHostApplicationLifetime lifetime,
         IDeploymentManager deploymentManager,
-        ProcessManager processManager,
+        IProcessManager processManager,
+        IVsdbgInstaller vsdbgInstaller,
         VsdbgManager vsdbgManager,
-        DebugSessionManager debugSessionManager)
+        IDebugSessionManager sessionManager)
     {
         _options = options;
         _stateStore = stateStore;
@@ -40,8 +42,9 @@ internal sealed class MeadowDaemonGrpcService : MeadowDaemonService.MeadowDaemon
         _lifetime = lifetime;
         _deploymentManager = deploymentManager;
         _processManager = processManager;
+        _vsdbgInstaller = vsdbgInstaller;
         _vsdbgManager = vsdbgManager;
-        _debugSessionManager = debugSessionManager;
+        _sessionManager = sessionManager;
     }
 
     private void LogCall(string rpc, ServerCallContext ctx)
@@ -129,40 +132,88 @@ internal sealed class MeadowDaemonGrpcService : MeadowDaemonService.MeadowDaemon
 
     // ── Process Lifecycle ──────────────────────────────────────────────────────
 
-    public override Task<StartProcessResponse> StartProcess(StartProcessRequest request, ServerCallContext context)
+    public override async Task<StartProcessResponse> StartProcess(StartProcessRequest request, ServerCallContext context)
     {
         LogCall(nameof(StartProcess), context);
-        throw Unimplemented(nameof(StartProcess));
+        ValidateAppName(request.AppName);
+        var result = await _processManager.StartAsync(request.AppName, context.CancellationToken);
+        return new StartProcessResponse
+        {
+            Success = result.Success,
+            Pid     = result.Pid ?? 0,
+            ErrorMessage = result.Error ?? ""
+        };
     }
 
-    public override Task<StopProcessResponse> StopProcess(StopProcessRequest request, ServerCallContext context)
+    public override async Task<StopProcessResponse> StopProcess(StopProcessRequest request, ServerCallContext context)
     {
         LogCall(nameof(StopProcess), context);
-        throw Unimplemented(nameof(StopProcess));
+        ValidateAppName(request.AppName);
+        await _processManager.StopAsync(request.AppName, context.CancellationToken);
+        return new StopProcessResponse { Success = true };
     }
 
-    public override Task<RestartProcessResponse> RestartProcess(RestartProcessRequest request, ServerCallContext context)
+    public override async Task<RestartProcessResponse> RestartProcess(RestartProcessRequest request, ServerCallContext context)
     {
         LogCall(nameof(RestartProcess), context);
-        throw Unimplemented(nameof(RestartProcess));
+        ValidateAppName(request.AppName);
+        var result = await _processManager.RestartAsync(request.AppName, context.CancellationToken);
+        return new RestartProcessResponse
+        {
+            Success = result.Success,
+            NewPid  = result.Pid ?? 0,
+            ErrorMessage = result.Error ?? ""
+        };
     }
 
     public override Task<GetProcessStatusResponse> GetProcessStatus(GetProcessStatusRequest request, ServerCallContext context)
     {
         LogCall(nameof(GetProcessStatus), context);
-        throw Unimplemented(nameof(GetProcessStatus));
+        ValidateAppName(request.AppName);
+        var state = _processManager.GetState(request.AppName);
+        var pid   = _processManager.GetPid(request.AppName);
+        return Task.FromResult(new GetProcessStatusResponse
+        {
+            Found = true,
+            Status = new ApplicationStatus
+            {
+                AppName = request.AppName,
+                State   = state,
+                Pid     = pid ?? 0,
+            }
+        });
     }
 
-    public override Task<ListProcessesResponse> ListProcesses(ListProcessesRequest request, ServerCallContext context)
+    public override async Task<ListProcessesResponse> ListProcesses(ListProcessesRequest request, ServerCallContext context)
     {
         LogCall(nameof(ListProcesses), context);
-        throw Unimplemented(nameof(ListProcesses));
+        var apps = await _stateStore.LoadAppsAsync(context.CancellationToken);
+        var response = new ListProcessesResponse();
+        foreach (var app in apps.Apps)
+        {
+            response.Apps.Add(new ApplicationStatus
+            {
+                AppName = app.Name,
+                State = _processManager.GetState(app.Name),
+                Pid = _processManager.GetPid(app.Name) ?? 0
+            });
+        }
+        return response;
     }
 
-    public override Task StreamOutput(StreamOutputRequest request, IServerStreamWriter<OutputLine> responseStream, ServerCallContext context)
+    public override async Task StreamOutput(StreamOutputRequest request, IServerStreamWriter<OutputLine> responseStream, ServerCallContext context)
     {
         LogCall(nameof(StreamOutput), context);
-        throw Unimplemented(nameof(StreamOutput));
+        ValidateAppName(request.AppName);
+        var broadcaster = _processManager.GetOutputBroadcaster(request.AppName);
+        var ct = context.CancellationToken;
+
+        await foreach (var line in broadcaster.Subscribe(ct))
+        {
+            try { await responseStream.WriteAsync(line, ct); }
+            catch (OperationCanceledException) { break; }
+            catch { break; }
+        }
     }
 
     // ── Deployment ─────────────────────────────────────────────────────────────
@@ -251,18 +302,12 @@ internal sealed class MeadowDaemonGrpcService : MeadowDaemonService.MeadowDaemon
                 dir = DaemonPaths.AppVersionDir(_options.Value, request.AppName, active);
         }
 
-        if (dir == null)
-            throw new RpcException(new Status(StatusCode.NotFound,
-                $"No active version for app '{request.AppName}'"));
-
-        if (!Directory.Exists(dir))
-            throw new RpcException(new Status(StatusCode.NotFound,
-                $"Deployment directory not found for app '{request.AppName}'"));
+        if (dir == null || !Directory.Exists(dir))
+            return new GetCurrentManifestResponse { Found = false };
 
         var manifestPath = Path.Combine(dir, "manifest.json");
         if (!File.Exists(manifestPath))
-            throw new RpcException(new Status(StatusCode.NotFound,
-                $"No manifest found for app '{request.AppName}'"));
+            return new GetCurrentManifestResponse { Found = false };
 
         try
         {
@@ -316,53 +361,143 @@ internal sealed class MeadowDaemonGrpcService : MeadowDaemonService.MeadowDaemon
 
         var count = request.KeepCount > 0 ? request.KeepCount : _options.Value.DeploymentRetentionCount;
         await _deploymentManager.PruneAsync(request.AppName, count, context.CancellationToken);
-        return new PruneDeploymentsResponse { DeletedCount = 0 }; // We don't track the exact count yet
+        return new PruneDeploymentsResponse { DeletedCount = 0 }; 
     }
 
     // ── vsdbg Management ───────────────────────────────────────────────────────
 
-    public override Task<GetVsdbgInfoResponse> GetVsdbgInfo(GetVsdbgInfoRequest request, ServerCallContext context)
+    public override async Task<GetVsdbgInfoResponse> GetVsdbgInfo(GetVsdbgInfoRequest request, ServerCallContext context)
     {
         LogCall(nameof(GetVsdbgInfo), context);
-        throw Unimplemented(nameof(GetVsdbgInfo));
+        await Task.Yield();
+        var version = _vsdbgInstaller.GetInstalledVersion();
+        return new GetVsdbgInfoResponse
+        {
+            Installed = version != null,
+            Version = version ?? "",
+            InstallPath = DaemonPaths.VsdbgBinPath(_options.Value)
+        };
     }
 
-    public override Task InstallVsdbg(InstallVsdbgRequest request, IServerStreamWriter<InstallVsdbgProgress> responseStream, ServerCallContext context)
+    public override async Task InstallVsdbg(InstallVsdbgRequest request, IServerStreamWriter<InstallVsdbgProgress> responseStream, ServerCallContext context)
     {
         LogCall(nameof(InstallVsdbg), context);
-        throw Unimplemented(nameof(InstallVsdbg));
+        var progress = new Progress<string>(async msg =>
+        {
+            try { await responseStream.WriteAsync(new InstallVsdbgProgress { StatusMessage = msg }, context.CancellationToken); }
+            catch { /* subscriber gone */ }
+        });
+        
+        try
+        {
+            await _vsdbgInstaller.InstallAsync(request.Version, progress, context.CancellationToken);
+            await responseStream.WriteAsync(new InstallVsdbgProgress { Success = true, StatusMessage = "complete" }, context.CancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await responseStream.WriteAsync(new InstallVsdbgProgress { Success = false, ErrorMessage = ex.Message }, context.CancellationToken);
+        }
     }
 
-    public override Task<UploadVsdbgTarballResponse> UploadVsdbgTarball(IAsyncStreamReader<UploadVsdbgTarballRequest> requestStream, ServerCallContext context)
+    public override async Task<UploadVsdbgTarballResponse> UploadVsdbgTarball(UploadVsdbgTarballRequest request, ServerCallContext context)
     {
         LogCall(nameof(UploadVsdbgTarball), context);
-        throw Unimplemented(nameof(UploadVsdbgTarball));
+        if (!File.Exists(request.TarballPath))
+            return new UploadVsdbgTarballResponse { Success = false, ErrorMessage = "Tarball not found at specified path" };
+
+        try
+        {
+            await using var stream = File.OpenRead(request.TarballPath);
+            await _vsdbgInstaller.InstallFromTarballAsync(stream, request.Sha256, new Progress<string>(_ => { }), context.CancellationToken);
+            return new UploadVsdbgTarballResponse { Success = true };
+        }
+        catch (Exception ex)
+        {
+            return new UploadVsdbgTarballResponse { Success = false, ErrorMessage = ex.Message };
+        }
     }
 
     // ── Debug Sessions ─────────────────────────────────────────────────────────
 
-    public override Task<StartDebugSessionResponse> StartDebugSession(StartDebugSessionRequest request, ServerCallContext context)
+    public override async Task<StartDebugSessionResponse> StartDebugSession(StartDebugSessionRequest request, ServerCallContext context)
     {
         LogCall(nameof(StartDebugSession), context);
-        throw Unimplemented(nameof(StartDebugSession));
+        ValidateAppName(request.AppName);
+        try
+        {
+            var session = await _sessionManager.StartDebugSessionAsync(
+                request.AppName, request.Mode, request.CorrelationId, context.CancellationToken);
+            return new StartDebugSessionResponse
+            {
+                Success = true,
+                SessionId = session.SessionId,
+                VsdbgPid = session.VsdbgPid,
+                VsdbgPort = session.VsdbgPort,
+                AppPid    = session.AppPid ?? 0,
+            };
+        }
+        catch (Exception ex)
+        {
+            return new StartDebugSessionResponse { Success = false, ErrorMessage = ex.Message };
+        }
     }
 
-    public override Task<StopDebugSessionResponse> StopDebugSession(StopDebugSessionRequest request, ServerCallContext context)
+    public override async Task<StopDebugSessionResponse> StopDebugSession(StopDebugSessionRequest request, ServerCallContext context)
     {
         LogCall(nameof(StopDebugSession), context);
-        throw Unimplemented(nameof(StopDebugSession));
+        await _sessionManager.StopDebugSessionAsync(request.SessionId, context.CancellationToken);
+        return new StopDebugSessionResponse { Success = true };
     }
 
-    public override Task<GetSessionStatusResponse> GetSessionStatus(GetSessionStatusRequest request, ServerCallContext context)
+    public override async Task<GetSessionStatusResponse> GetSessionStatus(GetSessionStatusRequest request, ServerCallContext context)
     {
         LogCall(nameof(GetSessionStatus), context);
-        throw Unimplemented(nameof(GetSessionStatus));
+        await _sessionManager.TouchSessionAsync(request.SessionId, context.CancellationToken);
+        var record = await _sessionManager.GetSessionStatusAsync(request.SessionId, context.CancellationToken);
+        if (record is null)
+            throw new RpcException(new Status(StatusCode.NotFound, $"Session '{request.SessionId}' not found"));
+        
+        return new GetSessionStatusResponse 
+        { 
+            Found = true,
+            Status = new SessionStatus
+            {
+                SessionId = record.SessionId,
+                AppName = record.AppName,
+                State = record.State,
+                VsdbgPort = record.VsdbgPort,
+                VsdbgPid = record.VsdbgPid,
+                AppPid = record.AppPid ?? 0,
+                Mode = record.Mode,
+                CorrelationId = record.CorrelationId,
+                StartedAtMs = record.StartedAt.ToUnixTimeMilliseconds(),
+                LastActivityMs = record.LastActivityAt.ToUnixTimeMilliseconds()
+            }
+        };
     }
 
-    public override Task<ListSessionsResponse> ListSessions(ListSessionsRequest request, ServerCallContext context)
+    public override async Task<ListSessionsResponse> ListSessions(ListSessionsRequest request, ServerCallContext context)
     {
         LogCall(nameof(ListSessions), context);
-        throw Unimplemented(nameof(ListSessions));
+        var sessions = await _sessionManager.ListSessionsAsync(context.CancellationToken);
+        var response = new ListSessionsResponse();
+        foreach (var s in sessions)
+        {
+            response.Sessions.Add(new SessionStatus
+            {
+                SessionId = s.SessionId,
+                AppName = s.AppName,
+                State = s.State,
+                VsdbgPort = s.VsdbgPort,
+                VsdbgPid = s.VsdbgPid,
+                AppPid = s.AppPid ?? 0,
+                Mode = s.Mode,
+                CorrelationId = s.CorrelationId,
+                StartedAtMs = s.StartedAt.ToUnixTimeMilliseconds(),
+                LastActivityMs = s.LastActivityAt.ToUnixTimeMilliseconds()
+            });
+        }
+        return response;
     }
 
     // ── Self-Update ────────────────────────────────────────────────────────────

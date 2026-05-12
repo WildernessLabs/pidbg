@@ -49,11 +49,11 @@ builder.Services.AddSingleton<VersionStore>();
 builder.Services.AddSingleton<StagingController>();
 builder.Services.AddSingleton<ManifestVerifier>();
 builder.Services.AddSingleton<IDeploymentManager, DeploymentManager>();
-builder.Services.AddSingleton<ProcessManager>();
-builder.Services.AddSingleton<VsdbgInstaller>();
+builder.Services.AddSingleton<IProcessManager, ProcessManager>();
+builder.Services.AddSingleton<IVsdbgInstaller, VsdbgInstaller>();
 builder.Services.AddSingleton<VsdbgManager>();
 builder.Services.AddSingleton<VsdbgLauncher>();
-builder.Services.AddSingleton<DebugSessionManager>();
+builder.Services.AddSingleton<IDebugSessionManager, DebugSessionManager>();
 
 // Background services
 builder.Services.AddHostedService<ProcessMonitorService>();

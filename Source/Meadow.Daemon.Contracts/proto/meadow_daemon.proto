@@ -106,7 +106,7 @@ service MeadowDaemonService {
   rpc InstallVsdbg(InstallVsdbgRequest) returns (stream InstallVsdbgProgress);
 
   // Install vsdbg from pre-uploaded tarball (air-gapped devices)
-  rpc UploadVsdbgTarball(stream UploadVsdbgTarballRequest)
+  rpc UploadVsdbgTarball(UploadVsdbgTarballRequest)
       returns (UploadVsdbgTarballResponse);
 
   // ── Debug Sessions ─────────────────────────────────────────────────────────

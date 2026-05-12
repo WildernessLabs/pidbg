@@ -2,14 +2,14 @@ namespace Meadow.Daemon.Models;
 
 public sealed record AppRecord
 {
-    public string Name                                         { get; init; } = "";
-    public string EntryPoint                                   { get; init; } = "";
-    public string? StartupArgs                                 { get; init; }
-    public IReadOnlyDictionary<string, string> EnvironmentVariables { get; init; }
+    public string Name                                         { get; set; } = "";
+    public string EntryPoint                                   { get; set; } = "";
+    public string? StartupArgs                                 { get; set; }
+    public IReadOnlyDictionary<string, string> EnvironmentVariables { get; set; }
         = new Dictionary<string, string>();
-    public string? ActiveVersion                               { get; init; }
-    public string? DebugVersion                                { get; init; } = "debug";
-    public bool   AutoStart                                    { get; init; } = true;
-    public int?   Pid                                          { get; init; }
-    public DateTimeOffset? LastStartedAt                       { get; init; }
+    public string? ActiveVersion                               { get; set; }
+    public string? DebugVersion                                { get; set; } = "debug";
+    public bool   AutoStart                                    { get; set; } = true;
+    public int?   Pid                                          { get; set; }
+    public DateTimeOffset? LastStartedAt                       { get; set; }
 }

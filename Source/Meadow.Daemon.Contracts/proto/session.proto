@@ -86,7 +86,8 @@ message StartDebugSessionResponse {
   string session_id    = 2;
   int32  vsdbg_pid     = 3;
   int32  vsdbg_port    = 4;
-  string error_message = 5;
+  int32  app_pid       = 5;
+  string error_message = 6;
 }
 
 // ─── Stop Debug Session ──────────────────────────────────────────────────────
