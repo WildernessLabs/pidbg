@@ -13,17 +13,16 @@
         <Parent guid="guidSHLMainMenu" id="IDM_VS_MENU_TOOLS"/>
       </Group>
       <!-- Group inside the Pi Debugger submenu -->
-      <Group guid="guidPiDbgCmdSet" id="grpPiDbgCommands" priority="0x0000">
+      <Group guid="guidPiDbgCmdSet" id="grpPiDbgCommands" priority="0x0100">
         <Parent guid="guidPiDbgCmdSet" id="mnuPiDbg"/>
       </Group>
     </Groups>
 
     <Menus>
-      <Menu guid="guidPiDbgCmdSet" id="mnuPiDbg" priority="0x0100" type="Menu">
+      <Menu guid="guidPiDbgCmdSet" id="mnuPiDbg" priority="0x0500" type="Menu">
         <Parent guid="guidPiDbgCmdSet" id="grpPiDbgInTools"/>
         <Strings>
           <ButtonText>Pi Debugger</ButtonText>
-          <CommandName>Pi Debugger</CommandName>
         </Strings>
       </Menu>
     </Menus>

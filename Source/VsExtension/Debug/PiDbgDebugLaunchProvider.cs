@@ -1,11 +1,6 @@
-using System;
-using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
 
-using Grpc.Core;
 using Meadow.Daemon.Contracts.V1;
 
 using Microsoft.VisualStudio.ProjectSystem;
@@ -58,15 +53,15 @@ internal sealed class PiDbgDebugLaunchProvider : IDebugLaunchProvider
         output.Activate(OutputPane.PiDbg);
 
         // --- Read project properties ---
-        var host    = await GetPropertyAsync(ProjectPropertyReader.PropHost).ConfigureAwait(false);
+        var host = await GetPropertyAsync(ProjectPropertyReader.PropHost).ConfigureAwait(false);
         if (string.IsNullOrEmpty(host))
             throw new InvalidOperationException(
                 "PiDbgHost project property is not set. " +
                 "Configure it via Project Properties → PiDbg tab.");
 
         var portStr = await GetPropertyAsync(ProjectPropertyReader.PropPort).ConfigureAwait(false);
-        var port    = int.TryParse(portStr, out var p) && p > 0 ? p : 22;
-        var user    = await GetPropertyAsync(ProjectPropertyReader.PropUsername).ConfigureAwait(false);
+        var port = int.TryParse(portStr, out var p) && p > 0 ? p : 22;
+        var user = await GetPropertyAsync(ProjectPropertyReader.PropUsername).ConfigureAwait(false);
         var keyFile = await GetPropertyAsync(ProjectPropertyReader.PropPrivateKeyPath).ConfigureAwait(false);
         var appNameProp = await GetPropertyAsync(ProjectPropertyReader.PropAppName).ConfigureAwait(false);
 
@@ -77,9 +72,9 @@ internal sealed class PiDbgDebugLaunchProvider : IDebugLaunchProvider
 
         var config = new SshConnectionConfig
         {
-            Host    = host,
-            Port    = port,
-            User    = string.IsNullOrEmpty(user) ? "pi" : user,
+            Host = host,
+            Port = port,
+            User = string.IsNullOrEmpty(user) ? "pi" : user,
             KeyFile = string.IsNullOrEmpty(keyFile) ? null : keyFile,
         };
 
@@ -131,8 +126,8 @@ internal sealed class PiDbgDebugLaunchProvider : IDebugLaunchProvider
         var sessionResp = await grpc.StartDebugSessionAsync(
             new StartDebugSessionRequest
             {
-                AppName       = appName,
-                Mode          = SessionMode.Attach,
+                AppName = appName,
+                Mode = SessionMode.Attach,
                 CorrelationId = Guid.NewGuid().ToString(),
             },
             cancellationToken: ct).ConfigureAwait(false);
@@ -153,11 +148,11 @@ internal sealed class PiDbgDebugLaunchProvider : IDebugLaunchProvider
         // --- Step 7: Build VS debug target (attach to already-running vsdbg) ---
         var settings = new DebugLaunchSettings(launchOptions)
         {
-            Executable            = $"{appName}.dll",
+            Executable = $"{appName}.dll",
             LaunchDebugEngineGuid = ManagedDebugEngineGuid,
-            LaunchOperation       = DebugLaunchOperation.AlreadyRunning,
-            RemoteMachine         = $"127.0.0.1:{localPort}",
-            Options               = BuildDebugOptions(sessionResp, localPort),
+            LaunchOperation = DebugLaunchOperation.AlreadyRunning,
+            RemoteMachine = $"127.0.0.1:{localPort}",
+            Options = BuildDebugOptions(sessionResp, localPort),
         };
 
         return new IDebugLaunchSettings[] { settings };
@@ -174,8 +169,8 @@ internal sealed class PiDbgDebugLaunchProvider : IDebugLaunchProvider
         => System.Text.Json.JsonSerializer.Serialize(new
         {
             transport = "tcp",
-            port      = localPort,
-            host      = "127.0.0.1",
+            port = localPort,
+            host = "127.0.0.1",
             sessionId = session.SessionId,
         });
 

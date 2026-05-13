@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 
@@ -15,17 +14,52 @@ namespace PiDbg;
 [Guid(PackageGuids.PackageGuidString)]
 public sealed class PiDbgPackage : AsyncPackage
 {
+    public static PiDbgPackage Current { get; private set; } = null!;
+
+    public static IOutputWindowService OutputWindow { get; private set; } = null!;
+    public static ISshConnectionManager Ssh { get; private set; } = null!;
+    public static IGrpcChannelFactory GrpcChannels { get; private set; } = null!;
+    public static IDebugTunnelManager Tunnels { get; private set; } = null!;
+
     protected override async Task InitializeAsync(
         CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
     {
+        Current = this;
+
         await base.InitializeAsync(cancellationToken, progress);
+        
+        // Switch to UI thread for services that interact with the shell
         await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
 
-        await OutputPaneManager.InitializeAsync(this);
-        await ConnectCommand.InitializeAsync(this);
-        await DisconnectCommand.InitializeAsync(this);
-        await ShowLogsCommand.InitializeAsync(this);
-        await ExportDiagnosticsCommand.InitializeAsync(this);
+        try
+        {
+            // Initialize infrastructure services
+            OutputWindow = new OutputWindowService(this);
+            Ssh = new SshConnectionManager(OutputWindow);
+            GrpcChannels = new GrpcChannelFactory();
+            Tunnels = new DebugTunnelManager();
+
+            await ConnectCommand.InitializeAsync(this);
+            await DisconnectCommand.InitializeAsync(this);
+            await ShowLogsCommand.InitializeAsync(this);
+            await ExportDiagnosticsCommand.InitializeAsync(this);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"PiDbgPackage initialization failed: {ex}");
+            throw;
+        }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            (Ssh as IDisposable)?.Dispose();
+            (GrpcChannels as IDisposable)?.Dispose();
+            (Tunnels as IDisposable)?.Dispose();
+        }
+        base.Dispose(disposing);
     }
 }
 
