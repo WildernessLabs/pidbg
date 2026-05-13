@@ -1,14 +1,16 @@
 <Window x:Class="PiDbg.UI.ConnectDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Connect to Raspberry Pi"
+        Title="Configure Pi Debugger"
         SizeToContent="WidthAndHeight"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         ShowInTaskbar="False"
-        MinWidth="380">
+        MinWidth="440">
     <Grid Margin="16,12">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -41,13 +43,27 @@
         <PasswordBox x:Name="PasswordBox" Grid.Row="3" Grid.Column="1" Margin="0,4"
                      ToolTip="Used once to install SSH key; key-based auth is used afterwards"/>
 
-        <CheckBox x:Name="RememberCheck" Grid.Row="4" Grid.ColumnSpan="2"
+        <Label Grid.Row="4" Grid.Column="0" Content="_Key File:" Margin="0,4"
+               Target="{Binding ElementName=KeyFileBox}" VerticalAlignment="Center"/>
+        <DockPanel Grid.Row="4" Grid.Column="1" Margin="0,4">
+            <Button DockPanel.Dock="Right" Content="Browse..." Width="70" Margin="4,0,0,0"
+                    Click="OnBrowseKey"/>
+            <TextBox x:Name="KeyFileBox"
+                     ToolTip="Path to SSH private key file (leave empty to use password)"/>
+        </DockPanel>
+
+        <Label Grid.Row="5" Grid.Column="0" Content="_App Name:" Margin="0,4"
+               Target="{Binding ElementName=AppNameBox}" VerticalAlignment="Center"/>
+        <TextBox x:Name="AppNameBox" Grid.Row="5" Grid.Column="1" Margin="0,4"
+                 ToolTip="Application identifier on the Pi (defaults to project assembly name)"/>
+
+        <CheckBox x:Name="RememberCheck" Grid.Row="6" Grid.ColumnSpan="2"
                   Margin="0,4" IsChecked="True"
                   Content="_Remember connection settings (host, user, port)"/>
 
-        <StackPanel Grid.Row="6" Grid.ColumnSpan="2"
+        <StackPanel Grid.Row="8" Grid.ColumnSpan="2"
                     Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Content="_Connect" Width="80" Margin="0,0,8,0"
+            <Button Content="_Save &amp; Connect" Width="110" Margin="0,0,8,0"
                     IsDefault="True" Click="OnConnect"/>
             <Button Content="Cancel" Width="80" IsCancel="True"/>
         </StackPanel>
