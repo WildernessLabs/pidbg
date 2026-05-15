@@ -1,10 +1,13 @@
+using System.ComponentModel.Design;
+using System.IO;
+
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
-using System.ComponentModel.Design;
 
+using PiDbg.Debug;
 using PiDbg.Infrastructure;
+using PiDbg.ProjectSystem;
 using PiDbg.UI;
-using PsReader = PiDbg.ProjectSystem.ProjectPropertyReader;
 
 namespace PiDbg.Commands;
 
@@ -26,39 +29,61 @@ internal sealed class ConnectCommand
         var pkg = PiDbgPackage.Current!;
         pkg.JoinableTaskFactory.RunAsync(async () =>
         {
-            var reader  = new PsReader(pkg);
-            var config  = await reader.GetConnectionConfigAsync(CancellationToken.None).ConfigureAwait(false);
-            var appName = await reader.GetAppNameAsync(CancellationToken.None).ConfigureAwait(false);
+            var ensurer = new PiDbgCapabilityEnsurer(pkg);
+            var projectPath = await ensurer.GetProjectPathAsync(CancellationToken.None)
+                .ConfigureAwait(false);
+
+            // Pre-fill dialog from existing profile if present.
+            SshConnectionConfig? existing = null;
+            string existingAppName = "";
+            if (projectPath is not null)
+            {
+                var read = await PiDbgLaunchProfileWriter.TryReadAsync(projectPath, CancellationToken.None)
+                    .ConfigureAwait(false);
+                existing = read?.Config;
+                existingAppName = read?.AppName ?? "";
+            }
 
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
             var dlg = new ConnectDialog();
             dlg.SetDefaults(
-                host:    config?.Host    ?? "",
-                user:    config?.User    ?? "pi",
-                port:    config?.Port    ?? 22,
-                keyFile: config?.KeyFile,
-                appName: appName);
+                host:    existing?.Host    ?? "",
+                user:    existing?.User    ?? "pi",
+                port:    existing?.Port    ?? 22,
+                keyFile: existing?.KeyFile,
+                appName: existingAppName);
 
             if (dlg.ShowDialog() != true) return;
 
-            await reader.SetConnectionConfigAsync(
-                new SshConnectionConfig
-                {
-                    Host    = dlg.Host,
-                    Port    = dlg.Port,
-                    User    = dlg.User,
-                    KeyFile = dlg.KeyFile,
-                },
-                CancellationToken.None).ConfigureAwait(false);
+            var config = new SshConnectionConfig
+            {
+                Host    = dlg.Host,
+                Port    = dlg.Port,
+                User    = dlg.User,
+                KeyFile = dlg.KeyFile,
+            };
 
-            var resolvedAppName = string.IsNullOrWhiteSpace(dlg.AppName) ? appName : dlg.AppName;
-            await reader.SetAppNameAsync(resolvedAppName, CancellationToken.None).ConfigureAwait(false);
-            await reader.EnsurePiDbgCapabilityAsync(CancellationToken.None).ConfigureAwait(false);
+            var appName = string.IsNullOrWhiteSpace(dlg.AppName)
+                ? (projectPath is null ? "MyApp" : Path.GetFileNameWithoutExtension(projectPath))
+                : dlg.AppName;
 
+            if (projectPath is not null)
+            {
+                await PiDbgLaunchProfileWriter.WriteAsync(
+                    projectPath, config, appName, CancellationToken.None)
+                    .ConfigureAwait(false);
+
+                await ensurer.EnsureAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+
+            await PiDbgStatusBarController.SetTargetAsync(
+                dlg.Host, pkg, CancellationToken.None).ConfigureAwait(false);
+
+            var profileName = PiDbgLaunchProfile.BuildProfileName(dlg.Host);
             PiDbgPackage.OutputWindow.WriteLine(OutputPane.PiDbg,
-                $"Pi Debugger configured: {dlg.User}@{dlg.Host}:{dlg.Port}  app={resolvedAppName}. " +
-                "Press F5 to deploy and debug.");
+                $"Pi Debugger configured: {dlg.User}@{dlg.Host}:{dlg.Port}  app={appName}. " +
+                $"Select '{profileName}' in the toolbar dropdown and press F5 to deploy and debug.");
         }).FileAndForget("PiDbg/ConnectCommand");
     }
 }

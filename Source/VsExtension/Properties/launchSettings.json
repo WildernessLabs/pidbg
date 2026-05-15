@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "PiDbg.Vsix": {
+      "commandName": "Project",
+      "commandLineArgs": "/log"
+    }
+  }
+}

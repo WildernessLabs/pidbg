@@ -1,5 +1,4 @@
 using System.ComponentModel.Composition;
-using System.IO;
 
 using Meadow.Daemon.Contracts.V1;
 
@@ -15,14 +14,12 @@ using PiDbg.Provisioning;
 namespace PiDbg.Debug;
 
 [Export(typeof(IDebugLaunchProvider))]
-[AppliesTo(PiDbgCapability)]
+[AppliesTo(PiDbgLaunchProfile.CommandName)]
 internal sealed class PiDbgDebugLaunchProvider : IDebugLaunchProvider
 {
-    public const string PiDbgCapability = "PiDbg";
-
     // VS debug engine GUID for the managed (.NET) debugger — must not change.
     private static readonly Guid ManagedDebugEngineGuid =
-        new Guid("2E36F1D4-B23C-435D-AB41-18E608940038");
+        new("2E36F1D4-B23C-435D-AB41-18E608940038");
 
     private readonly ConfiguredProject _project;
 
@@ -34,11 +31,12 @@ internal sealed class PiDbgDebugLaunchProvider : IDebugLaunchProvider
 
     public async Task<bool> CanLaunchAsync(DebugLaunchOptions launchOptions)
     {
-        var host = await GetPropertyAsync(ProjectPropertyReader.PropHost).ConfigureAwait(false);
-        return !string.IsNullOrEmpty(host);
+        var profile = await PiDbgLaunchProfileWriter
+            .TryReadAsync(_project.UnconfiguredProject.FullPath, CancellationToken.None)
+            .ConfigureAwait(false);
+        return profile.HasValue && !string.IsNullOrEmpty(profile.Value.Config.Host);
     }
 
-    // Called when launching with the debugger attached (F5).
     public Task<IReadOnlyList<IDebugLaunchSettings>> QueryDebugTargetsForDebugLaunchAsync(
         DebugLaunchOptions launchOptions)
         => QueryDebugTargetsAsync(launchOptions);
@@ -52,36 +50,23 @@ internal sealed class PiDbgDebugLaunchProvider : IDebugLaunchProvider
         var output = PiDbgPackage.OutputWindow;
         output.Activate(OutputPane.PiDbg);
 
-        // --- Read project properties ---
-        var host = await GetPropertyAsync(ProjectPropertyReader.PropHost).ConfigureAwait(false);
-        if (string.IsNullOrEmpty(host))
-            throw new InvalidOperationException(
-                "PiDbgHost project property is not set. " +
-                "Configure it via Project Properties → PiDbg tab.");
-
-        var portStr = await GetPropertyAsync(ProjectPropertyReader.PropPort).ConfigureAwait(false);
-        var port = int.TryParse(portStr, out var p) && p > 0 ? p : 22;
-        var user = await GetPropertyAsync(ProjectPropertyReader.PropUsername).ConfigureAwait(false);
-        var keyFile = await GetPropertyAsync(ProjectPropertyReader.PropPrivateKeyPath).ConfigureAwait(false);
-        var appNameProp = await GetPropertyAsync(ProjectPropertyReader.PropAppName).ConfigureAwait(false);
-
         var projectFile = _project.UnconfiguredProject.FullPath;
-        var appName = string.IsNullOrEmpty(appNameProp)
-            ? Path.GetFileNameWithoutExtension(projectFile)
-            : appNameProp;
-
-        var config = new SshConnectionConfig
-        {
-            Host = host,
-            Port = port,
-            User = string.IsNullOrEmpty(user) ? "pi" : user,
-            KeyFile = string.IsNullOrEmpty(keyFile) ? null : keyFile,
-        };
-
-        output.WriteLine(OutputPane.PiDbg, $"=== PiDbg: {appName} on {host} ===");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
         var ct = cts.Token;
+
+        var profile = await PiDbgLaunchProfileWriter.TryReadAsync(projectFile, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException(
+                "Pi profile not found. Use 'Connect to Pi' to configure the connection.");
+
+        var config = profile.Config;
+        var appName = profile.AppName;
+
+        if (string.IsNullOrEmpty(config.Host))
+            throw new InvalidOperationException(
+                "Pi host is not configured. Use 'Connect to Pi' to set up the connection.");
+
+        output.WriteLine(OutputPane.PiDbg, $"=== PiDbg: {appName} on {config.Host} ===");
 
         // --- Step 1: SSH connection ---
         var session = await PiDbgPackage.Ssh
@@ -142,7 +127,7 @@ internal sealed class PiDbgDebugLaunchProvider : IDebugLaunchProvider
             .ConfigureAwait(false);
 
         output.WriteLine(OutputPane.PiDbg,
-            $"Tunnel: localhost:{localPort} → {host}:{sessionResp.VsdbgPort}");
+            $"Tunnel: localhost:{localPort} → {config.Host}:{sessionResp.VsdbgPort}");
         output.WriteLine(OutputPane.PiDbg, "Attaching VS debugger...");
 
         // --- Step 7: Build VS debug target (attach to already-running vsdbg) ---
@@ -158,11 +143,9 @@ internal sealed class PiDbgDebugLaunchProvider : IDebugLaunchProvider
         return new IDebugLaunchSettings[] { settings };
     }
 
-    private async Task<string> GetPropertyAsync(string name)
+    public async Task LaunchAsync(DebugLaunchOptions launchOptions)
     {
-        var props = _project.Services.ProjectPropertiesProvider?.GetCommonProperties();
-        if (props == null) return "";
-        return await props.GetEvaluatedPropertyValueAsync(name).ConfigureAwait(false);
+        await QueryDebugTargetsAsync(launchOptions).ConfigureAwait(false);
     }
 
     private static string BuildDebugOptions(StartDebugSessionResponse session, int localPort)
@@ -173,15 +156,4 @@ internal sealed class PiDbgDebugLaunchProvider : IDebugLaunchProvider
             host = "127.0.0.1",
             sessionId = session.SessionId,
         });
-
-    // Called when launching without the debugger (Ctrl+F5).
-    public async Task LaunchAsync(DebugLaunchOptions launchOptions)
-    {
-        var targets = await QueryDebugTargetsAsync(launchOptions).ConfigureAwait(false);
-        foreach (var target in targets)
-        {
-            // For now, we don't have a separate "run without debug" path on the daemon
-            // so we just launch it and let VS handle what it can.
-        }
-    }
 }
