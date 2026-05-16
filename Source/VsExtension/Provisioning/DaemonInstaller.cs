@@ -16,7 +16,7 @@ internal static class DaemonInstaller
 {
     // Populated at VSIX build time by a T4 or source generator stamping the bundled binary.
     // Placeholder values are safe: without RequiredSha256, the SHA check is skipped.
-    public const string RequiredVersion = "1.0.9";
+    public const string RequiredVersion = "1.0.13";
     public const string RequiredSha256 = "";
 
     public static DaemonInstallAction DetermineAction(DetectionResult detection)
@@ -39,6 +39,7 @@ internal static class DaemonInstaller
         SshSession session,
         DaemonInstallAction action,
         string rootFolder,
+        string dotnetRoot,
         IProgress<string> progress,
         CancellationToken ct)
     {
@@ -91,7 +92,7 @@ internal static class DaemonInstaller
             throw new ProvisioningException($"Failed to install daemon binary: {err}");
 
         progress.Report("Installing systemd service...");
-        var serviceContent = RenderServiceTemplate(absRoot);
+        var serviceContent = RenderServiceTemplate(absRoot, dotnetRoot);
         var serviceDir = session.ExpandPath("~/.config/systemd/user");
         await session.ExecuteAsync($"mkdir -p '{serviceDir}'", ct).ConfigureAwait(false);
         await UploadTextAsync(session, serviceContent,
@@ -110,6 +111,30 @@ internal static class DaemonInstaller
             throw new ProvisioningException($"Failed to start service: {err}");
 
         progress.Report("Daemon installed and running.");
+    }
+
+    public static async Task UpdateServiceAsync(
+        SshSession session,
+        string rootFolder,
+        string dotnetRoot,
+        IProgress<string> progress,
+        CancellationToken ct)
+    {
+        progress.Report("Updating systemd service with new DOTNET_ROOT...");
+        var absRoot = session.ExpandPath(rootFolder);
+        var serviceContent = RenderServiceTemplate(absRoot, dotnetRoot);
+        var serviceDir = session.ExpandPath("~/.config/systemd/user");
+        await session.ExecuteAsync($"mkdir -p '{serviceDir}'", ct).ConfigureAwait(false);
+        await UploadTextAsync(session, serviceContent,
+            $"{serviceDir}/meadow-daemon.service", ct).ConfigureAwait(false);
+
+        var (rc, _, err) = await session.ExecuteAsync(
+            "systemctl --user daemon-reload && systemctl --user restart meadow-daemon",
+            ct).ConfigureAwait(false);
+        if (rc != 0)
+            throw new ProvisioningException($"Failed to restart service after update: {err}");
+
+        progress.Report("Service updated and restarted.");
     }
 
     public static async Task<bool> WaitForHealthAsync(
@@ -136,12 +161,13 @@ internal static class DaemonInstaller
         return false;
     }
 
-    private static string RenderServiceTemplate(string rootFolder)
+    private static string RenderServiceTemplate(string rootFolder, string dotnetRoot)
     {
         var template = LoadEmbeddedText("meadow-daemon.service.template");
         return template
             .Replace("@@DAEMON_BIN@@", $"{rootFolder}/bin/meadow-daemon")
             .Replace("@@INSTALL_DIR@@", rootFolder)
+            .Replace("@@DOTNET_ROOT@@", dotnetRoot)
             .Replace("@@EXTRA_ARGS@@", "")
             .Replace("\r\n", "\n")
             .Replace("\r", "\n");
@@ -186,8 +212,11 @@ internal static class DaemonInstaller
     private static bool IsVersionLessThan(string installed, string required)
     {
         if (string.IsNullOrEmpty(installed) || string.IsNullOrEmpty(required)) return false;
-        if (Version.TryParse(installed, out var v1) && Version.TryParse(required, out var v2))
+        // Strip +commithash suffix appended by .NET SDK to AssemblyInformationalVersion.
+        var cleanInstalled = installed.Split('+')[0].Trim();
+        var cleanRequired = required.Split('+')[0].Trim();
+        if (Version.TryParse(cleanInstalled, out var v1) && Version.TryParse(cleanRequired, out var v2))
             return v1 < v2;
-        return string.Compare(installed, required, StringComparison.OrdinalIgnoreCase) < 0;
+        return string.Compare(cleanInstalled, cleanRequired, StringComparison.OrdinalIgnoreCase) < 0;
     }
 }

@@ -32,7 +32,7 @@ public static class DaemonPaths
 
     // vsdbg
     public static string VsdbgDir(DaemonOptions o)       => o.VsdbgRoot;
-    public static string VsdbgBinPath(DaemonOptions o)   => Path.Combine(o.VsdbgRoot, "vsdbg-ui");
+    public static string VsdbgBinPath(DaemonOptions o)   => Path.Combine(o.VsdbgRoot, "vsdbg");
     public static string VsdbgVersionFile(DaemonOptions o) => Path.Combine(o.VsdbgRoot, ".version");
 
     // State

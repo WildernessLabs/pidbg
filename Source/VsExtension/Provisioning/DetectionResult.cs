@@ -51,6 +51,7 @@ internal sealed class DetectionVsdbg
 internal sealed class DetectionRuntime
 {
     [JsonPropertyName("dotnet_version")]         public string DotnetVersion        { get; set; } = "";
+    [JsonPropertyName("dotnet_root")]            public string DotnetRoot           { get; set; } = "";
     [JsonPropertyName("systemd_user_available")] public bool   SystemdUserAvailable { get; set; }
     [JsonPropertyName("curl_available")]         public bool   CurlAvailable        { get; set; }
 }

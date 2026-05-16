@@ -64,15 +64,64 @@ internal static class ProvisioningOrchestrator
         steps.Add(MakeStep("Platform validation", true,
             $"{report.Warnings.Count} warning(s)"));
 
-        // --- Step 3: Daemon install ---
-        output.WriteLine(OutputPane.PiDbg, "[3/7] Checking daemon...");
+        // --- Step 3: .NET runtime ---
+        output.WriteLine(OutputPane.PiDbg, "[3/8] Checking .NET runtime...");
+        var dotnetRoot = detection.Runtime.DotnetRoot;
+        var dotnetWasInstalled = false;
+        if (string.IsNullOrEmpty(detection.Runtime.DotnetVersion))
+        {
+            output.WriteLine(OutputPane.PiDbg, "  .NET not found — installing...");
+            var dotnetProg = new Progress<string>(
+                msg => output.WriteLine(OutputPane.PiDbg, $"  {msg}"));
+            try
+            {
+                await DotnetInstaller.InstallAsync(session, dotnetProg, ct).ConfigureAwait(false);
+                dotnetRoot = session.ExpandPath("~/.dotnet");
+                dotnetWasInstalled = true;
+                steps.Add(MakeStep(".NET install", true, "installed"));
+            }
+            catch (ProvisioningException ex)
+            {
+                return Fail(steps, ".NET install", ex.Message);
+            }
+        }
+        else
+        {
+            output.WriteLine(OutputPane.PiDbg,
+                $"  .NET {detection.Runtime.DotnetVersion} found at {dotnetRoot}");
+            steps.Add(MakeStep(".NET runtime", true, detection.Runtime.DotnetVersion, skipped: true));
+        }
+
+        // --- Step 4: Daemon install ---
+        output.WriteLine(OutputPane.PiDbg, "[4/8] Checking daemon...");
         var action = DaemonInstaller.DetermineAction(detection);
 
         if (action == DaemonInstallAction.None)
         {
             output.WriteLine(OutputPane.PiDbg,
-                $"  Daemon {detection.Daemon.BinaryVersion} is current (no action needed)");
-            steps.Add(MakeStep("Daemon", true, "up to date", skipped: true));
+                $"  Daemon {detection.Daemon.BinaryVersion} is current");
+
+            // Always sync the service file so PATH/DOTNET_ROOT stays current even
+            // when the binary didn't change (e.g. dotnet moved to ~/.dotnet).
+            if (!string.IsNullOrEmpty(dotnetRoot))
+            {
+                var svcProg = new Progress<string>(
+                    msg => output.WriteLine(OutputPane.PiDbg, $"  {msg}"));
+                try
+                {
+                    await DaemonInstaller.UpdateServiceAsync(
+                        session, rootFolder, dotnetRoot, svcProg, ct).ConfigureAwait(false);
+                    steps.Add(MakeStep("Daemon", true, "service synced"));
+                }
+                catch (ProvisioningException ex)
+                {
+                    return Fail(steps, "Daemon service update", ex.Message);
+                }
+            }
+            else
+            {
+                steps.Add(MakeStep("Daemon", true, "up to date", skipped: true));
+            }
         }
         else
         {
@@ -81,7 +130,7 @@ internal static class ProvisioningOrchestrator
                 msg => output.WriteLine(OutputPane.PiDbg, $"  {msg}"));
             try
             {
-                await DaemonInstaller.InstallAsync(session, action, rootFolder, prog, ct).ConfigureAwait(false);
+                await DaemonInstaller.InstallAsync(session, action, rootFolder, dotnetRoot, prog, ct).ConfigureAwait(false);
                 steps.Add(MakeStep("Daemon install", true, action.ToString()));
             }
             catch (ProvisioningException ex)

@@ -54,7 +54,7 @@ systemctl --user is-active meadow-daemon 2>/dev/null \
     | grep -q "^active"  && SVC_RUN=true  || true
 
 # ── vsdbg ─────────────────────────────────────────────────────────────────────
-VSDBG_BIN="$ROOT_FOLDER/vsdbg/vsdbg-ui"
+VSDBG_BIN="$ROOT_FOLDER/vsdbg/vsdbg"
 V_EXISTS=false; V_VER=""
 if [ -f "$VSDBG_BIN" ]; then
     V_EXISTS=true
@@ -62,7 +62,14 @@ if [ -f "$VSDBG_BIN" ]; then
 fi
 
 # ── Runtime ───────────────────────────────────────────────────────────────────
-DOTNET=$(dotnet --version 2>/dev/null | tr -d '\r' || echo "")
+DOTNET=""; DOTNET_ROOT=""
+if command -v dotnet >/dev/null 2>&1; then
+    DOTNET=$(dotnet --version 2>/dev/null | tr -d '\r' || echo "")
+    DOTNET_ROOT=$(dirname "$(command -v dotnet)" 2>/dev/null || echo "")
+elif [ -f "$HOME/.dotnet/dotnet" ]; then
+    DOTNET=$("$HOME/.dotnet/dotnet" --version 2>/dev/null | tr -d '\r' || echo "")
+    DOTNET_ROOT="$HOME/.dotnet"
+fi
 SYSTEMD_USER=false
 systemctl --user status 2>/dev/null | grep -qE "State: running" \
     && SYSTEMD_USER=true || true
@@ -102,6 +109,7 @@ printf '    "version": "%s"\n'      "$V_VER"
 printf '  },\n'
 printf '  "runtime": {\n'
 printf '    "dotnet_version": "%s",\n'       "$DOTNET"
+printf '    "dotnet_root": "%s",\n'         "$DOTNET_ROOT"
 printf '    "systemd_user_available": %s,\n' "$SYSTEMD_USER"
 printf '    "curl_available": %s\n'          "$CURL"
 printf '  }\n'

@@ -62,7 +62,7 @@ internal class ProcessManager : IProcessManager, IDisposable
             return new StartProcessResult(false, null, $"Entry point not found: {entryPoint}");
         }
 
-        var info = new ProcessStartInfo("dotnet", entryPoint)
+        var info = new ProcessStartInfo(ResolveDotnetExecutable(), entryPoint)
         {
             WorkingDirectory       = debugDir,
             RedirectStandardOutput = true,
@@ -214,6 +214,20 @@ internal class ProcessManager : IProcessManager, IDisposable
             }
         }
         catch { /* process not found or no access */ }
+    }
+
+    private static string ResolveDotnetExecutable()
+    {
+        var dotnetRoot = Environment.GetEnvironmentVariable("DOTNET_ROOT");
+        if (!string.IsNullOrEmpty(dotnetRoot))
+        {
+            var candidate = Path.Combine(dotnetRoot, "dotnet");
+            if (File.Exists(candidate)) return candidate;
+        }
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var homeCandidate = Path.Combine(home, ".dotnet", "dotnet");
+        if (File.Exists(homeCandidate)) return homeCandidate;
+        return "dotnet";
     }
 
     private void OnProcessExited(string appName, ManagedProcess managed)
