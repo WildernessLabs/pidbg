@@ -27,17 +27,17 @@ internal static class ProvisioningOrchestrator
         SshSession session,
         IGrpcChannelFactory channelFactory,
         IOutputWindowService output,
+        string rootFolder,
         CancellationToken ct)
     {
         var steps = new List<ProvisioningStep>();
-        output.Activate(OutputPane.Provisioning);
 
         // --- Step 1: Capability Detection ---
         output.WriteLine(OutputPane.Provisioning, "[1/7] Detecting device capabilities...");
         DetectionResult detection;
         try
         {
-            detection = await CapabilityDetector.DetectAsync(session, ct).ConfigureAwait(false);
+            detection = await CapabilityDetector.DetectAsync(session, rootFolder, ct).ConfigureAwait(false);
             steps.Add(MakeStep("Detection", true,
                 $"Host: {detection.Host.OsPretty} ({detection.Host.Arch})"));
         }
@@ -48,7 +48,7 @@ internal static class ProvisioningOrchestrator
 
         // --- Step 2: Platform Validation ---
         output.WriteLine(OutputPane.Provisioning, "[2/7] Validating platform...");
-        var report = PlatformValidator.Validate(detection);
+        var report = PlatformValidator.Validate(detection, rootFolder);
         foreach (var item in report.Items)
             output.WriteLine(OutputPane.Provisioning,
                 $"  [{(item.Passed ? "OK" : item.IsFatal ? "FAIL" : "WARN")}] " +
@@ -79,7 +79,7 @@ internal static class ProvisioningOrchestrator
                 msg => output.WriteLine(OutputPane.Provisioning, $"  {msg}"));
             try
             {
-                await DaemonInstaller.InstallAsync(session, action, prog, ct).ConfigureAwait(false);
+                await DaemonInstaller.InstallAsync(session, action, rootFolder, prog, ct).ConfigureAwait(false);
                 steps.Add(MakeStep("Daemon install", true, action.ToString()));
             }
             catch (ProvisioningException ex)

@@ -48,7 +48,6 @@ internal sealed class PiDbgDebugLaunchProvider : IDebugLaunchProvider
             ?? throw new InvalidOperationException("PiDbg package is not yet initialized.");
 
         var output = PiDbgPackage.OutputWindow;
-        output.Activate(OutputPane.PiDbg);
 
         var projectFile = _project.UnconfiguredProject.FullPath;
 
@@ -75,7 +74,7 @@ internal sealed class PiDbgDebugLaunchProvider : IDebugLaunchProvider
         // --- Step 2: Provision (idempotent) ---
         output.WriteLine(OutputPane.PiDbg, "Provisioning...");
         var provision = await ProvisioningOrchestrator
-            .ProvisionAsync(session, PiDbgPackage.GrpcChannels, output, ct)
+            .ProvisionAsync(session, PiDbgPackage.GrpcChannels, output, config.RootFolder, ct)
             .ConfigureAwait(false);
 
         if (!provision.Success)

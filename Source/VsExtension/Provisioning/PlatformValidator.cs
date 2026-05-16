@@ -5,7 +5,7 @@ namespace PiDbg.Provisioning;
 
 internal static class PlatformValidator
 {
-    public static ValidationReport Validate(DetectionResult result)
+    public static ValidationReport Validate(DetectionResult result, string rootFolder)
     {
         var items = new List<ValidationItem>();
 
@@ -38,26 +38,25 @@ internal static class PlatformValidator
             "systemd --user available",
             "systemd user session not available. Ensure pam_systemd.so is configured."));
 
-        items.Add(Check("Directory /opt/meadow",
-            result.Filesystem.OptMeadowExists,
+        items.Add(Check($"Root Folder ({rootFolder})",
+            result.Filesystem.RootExists,
             fatal: true,
-            "/opt/meadow exists",
-            "/opt/meadow does not exist. Run setup-meadow.sh on the device first:\n" +
-            "  curl -sSL .../setup-meadow.sh | sudo bash"));
+            $"{rootFolder} exists",
+            $"{rootFolder} could not be created. Check that the path is valid and the disk is writable."));
 
-        items.Add(Check("/opt/meadow Writable",
-            result.Filesystem.OptMeadowWritable,
+        items.Add(Check("Root Folder Writable",
+            result.Filesystem.RootWritable,
             fatal: true,
-            "/opt/meadow is writable",
-            "/opt/meadow is not writable. Run setup-meadow.sh to fix ownership:\n" +
-            "  sudo chown -R $USER /opt/meadow"));
+            $"{rootFolder} is writable",
+            $"{rootFolder} is not writable. Check folder permissions:\n" +
+            $"  chmod u+w {rootFolder}"));
 
         items.Add(Check("Disk Space",
-            result.Filesystem.FreeBytesOpt >= 200L * 1024 * 1024,
+            result.Filesystem.FreeBytes >= 200L * 1024 * 1024,
             fatal: true,
-            $"{result.Filesystem.FreeBytesOpt / 1024 / 1024} MB free (OK)",
+            $"{result.Filesystem.FreeBytes / 1024 / 1024} MB free (OK)",
             $"Insufficient disk space: " +
-            $"{result.Filesystem.FreeBytesOpt / 1024 / 1024} MB available, 200 MB required."));
+            $"{result.Filesystem.FreeBytes / 1024 / 1024} MB available, 200 MB required."));
 
         items.Add(Check("Linger Enabled",
             result.Host.Linger,

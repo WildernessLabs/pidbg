@@ -16,10 +16,14 @@ internal static class CapabilityDetector
     private static readonly JsonSerializerOptions JsonOpts =
         new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
 
-    public static async Task<DetectionResult> DetectAsync(SshSession session, CancellationToken ct)
+    public static async Task<DetectionResult> DetectAsync(
+        SshSession session, string rootFolder, CancellationToken ct)
     {
-        // Inject script via stdin heredoc — avoids a temporary SFTP file upload
-        var heredoc = $"bash -s <<'DETECT_SCRIPT'\n{DetectScript}\nDETECT_SCRIPT";
+        // Prepend ROOT_FOLDER assignment so the script can use it.
+        // Single-quote the heredoc delimiter so bash won't expand $ in script body;
+        // the variable is set as a separate statement before the heredoc.
+        var escaped = rootFolder.Replace("'", "'\\''");
+        var heredoc = $"ROOT_FOLDER='{escaped}' bash -s <<'DETECT_SCRIPT'\n{DetectScript}\nDETECT_SCRIPT";
         var (_, stdout, stderr) = await session.ExecuteAsync(heredoc, ct).ConfigureAwait(false);
 
         if (string.IsNullOrWhiteSpace(stdout))

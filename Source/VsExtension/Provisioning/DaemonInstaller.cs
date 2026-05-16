@@ -39,6 +39,7 @@ internal static class DaemonInstaller
     public static async Task InstallAsync(
         SshSession session,
         DaemonInstallAction action,
+        string rootFolder,
         IProgress<string> progress,
         CancellationToken ct)
     {
@@ -52,12 +53,17 @@ internal static class DaemonInstaller
                 "Daemon binary not bundled in this VSIX. " +
                 "Please install the official release of the PiDbg extension.");
 
+        var binDir    = $"{rootFolder}/bin";
+        var daemonBin = $"{binDir}/meadow-daemon";
+
+        // Ensure bin directory exists
+        await session.ExecuteAsync($"mkdir -p '{binDir}'", ct).ConfigureAwait(false);
+
         if (action == DaemonInstallAction.Upgrade)
         {
             progress.Report("Backing up existing daemon binary...");
             await session.ExecuteAsync(
-                "cp /opt/meadow/bin/meadow-daemon " +
-                "/opt/meadow/bin/meadow-daemon.bak 2>/dev/null || true",
+                $"cp '{daemonBin}' '{daemonBin}.bak' 2>/dev/null || true",
                 ct).ConfigureAwait(false);
         }
 
@@ -67,24 +73,25 @@ internal static class DaemonInstaller
         {
             await session.UploadFileAsync(
                 binaryStream,
-                "/opt/meadow/bin/meadow-daemon.new",
+                $"{daemonBin}.new",
                 new Progress<long>(bytes =>
                     progress.Report($"  {bytes / 1024 / 1024} MB uploaded...")),
                 ct).ConfigureAwait(false);
         }
 
         var (rc, _, err) = await session.ExecuteAsync(
-            "chmod 755 /opt/meadow/bin/meadow-daemon.new && " +
-            "mv /opt/meadow/bin/meadow-daemon.new /opt/meadow/bin/meadow-daemon",
+            $"chmod 755 '{daemonBin}.new' && mv '{daemonBin}.new' '{daemonBin}'",
             ct).ConfigureAwait(false);
         if (rc != 0)
             throw new ProvisioningException($"Failed to install daemon binary: {err}");
 
         progress.Report("Installing systemd service...");
-        var serviceContent = RenderServiceTemplate();
+        var serviceContent = RenderServiceTemplate(rootFolder);
         var username = session.Ssh.ConnectionInfo.Username;
+        var serviceDir = $"/home/{username}/.config/systemd/user";
+        await session.ExecuteAsync($"mkdir -p '{serviceDir}'", ct).ConfigureAwait(false);
         await UploadTextAsync(session, serviceContent,
-            $"/home/{username}/.config/systemd/user/meadow-daemon.service", ct)
+            $"{serviceDir}/meadow-daemon.service", ct)
             .ConfigureAwait(false);
 
         progress.Report("Enabling and starting service...");
@@ -122,13 +129,13 @@ internal static class DaemonInstaller
         return false;
     }
 
-    private static string RenderServiceTemplate()
+    private static string RenderServiceTemplate(string rootFolder)
     {
         var template = LoadEmbeddedText("meadow-daemon.service.template");
         return template
-            .Replace("@@DAEMON_BIN@@",   "/opt/meadow/bin/meadow-daemon")
-            .Replace("@@INSTALL_DIR@@",  "/opt/meadow")
-            .Replace("@@EXTRA_ARGS@@",   "");
+            .Replace("@@DAEMON_BIN@@",  $"{rootFolder}/bin/meadow-daemon")
+            .Replace("@@INSTALL_DIR@@", rootFolder)
+            .Replace("@@EXTRA_ARGS@@",  "");
     }
 
     private static Stream? GetEmbeddedBinary()

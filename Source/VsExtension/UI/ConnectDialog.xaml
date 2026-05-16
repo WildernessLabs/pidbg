@@ -16,6 +16,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="12"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -57,11 +58,17 @@
         <TextBox x:Name="AppNameBox" Grid.Row="5" Grid.Column="1" Margin="0,4"
                  ToolTip="Application identifier on the Pi (defaults to project assembly name)"/>
 
-        <CheckBox x:Name="RememberCheck" Grid.Row="6" Grid.ColumnSpan="2"
+        <Label Grid.Row="6" Grid.Column="0" Content="_Root Folder:" Margin="0,4"
+               Target="{Binding ElementName=RootFolderBox}" VerticalAlignment="Center"/>
+        <TextBox x:Name="RootFolderBox" Grid.Row="6" Grid.Column="1" Margin="0,4"
+                 Text="~/meadow"
+                 ToolTip="Base deployment directory on the Pi (~ expands to home directory)"/>
+
+        <CheckBox x:Name="RememberCheck" Grid.Row="7" Grid.ColumnSpan="2"
                   Margin="0,4" IsChecked="True"
                   Content="_Remember connection settings (host, user, port)"/>
 
-        <StackPanel Grid.Row="8" Grid.ColumnSpan="2"
+        <StackPanel Grid.Row="9" Grid.ColumnSpan="2"
                     Orientation="Horizontal" HorizontalAlignment="Right">
             <Button Content="_Save &amp; Connect" Width="110" Margin="0,0,8,0"
                     IsDefault="True" Click="OnConnect"/>

@@ -40,10 +40,12 @@ internal static class PiDbgLaunchProfileWriter
             return (
                 new SshConnectionConfig
                 {
-                    Host    = host,
-                    Port    = int.TryParse(node["PiDbgPort"]?.ToString(), out var p) && p > 0 ? p : 22,
-                    User    = NE(node["PiDbgUsername"]?.GetValue<string>(), "pi"),
-                    KeyFile = NullIfEmpty(node["PiDbgPrivateKeyPath"]?.GetValue<string>()),
+                    Host       = host,
+                    Port       = int.TryParse(node["PiDbgPort"]?.ToString(), out var p) && p > 0 ? p : 22,
+                    User       = NE(node["PiDbgUsername"]?.GetValue<string>(), "pi"),
+                    RootFolder = NE(node["PiDbgRootFolder"]?.GetValue<string>(), "~/meadow"),
+                    KeyFile    = NullIfEmpty(node["PiDbgPrivateKeyPath"]?.GetValue<string>()),
+                    Password   = NullIfEmpty(node["PiDbgPassword"]?.GetValue<string>()),
                 },
                 node["PiDbgAppName"]?.GetValue<string>() ?? ""
             );
@@ -92,6 +94,8 @@ internal static class PiDbgLaunchProfileWriter
             ["PiDbgHost"]           = config.Host,
             ["PiDbgPort"]           = config.Port,
             ["PiDbgUsername"]       = config.User,
+            ["PiDbgRootFolder"]     = config.RootFolder,
+            ["PiDbgPassword"]       = config.Password ?? "",
             ["PiDbgPrivateKeyPath"] = config.KeyFile ?? "",
             ["PiDbgAppName"]        = appName,
         };

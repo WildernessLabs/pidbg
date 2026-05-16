@@ -68,20 +68,23 @@ internal sealed class ConnectCommand
 
         var dlg = new ConnectDialog();
         dlg.SetDefaults(
-            host:    existing?.Host    ?? "",
-            user:    existing?.User    ?? "pi",
-            port:    existing?.Port    ?? 22,
-            keyFile: existing?.KeyFile,
-            appName: existingAppName);
+            host:       existing?.Host       ?? "",
+            user:       existing?.User       ?? "pi",
+            port:       existing?.Port       ?? 22,
+            rootFolder: existing?.RootFolder ?? "~/meadow",
+            keyFile:    existing?.KeyFile,
+            appName:    existingAppName);
 
         if (dlg.ShowDialog() != true) return;
 
         var config = new SshConnectionConfig
         {
-            Host    = dlg.Host,
-            Port    = dlg.Port,
-            User    = dlg.User,
-            KeyFile = dlg.KeyFile,
+            Host       = dlg.Host,
+            Port       = dlg.Port,
+            User       = dlg.User,
+            RootFolder = dlg.RootFolder,
+            KeyFile    = dlg.KeyFile,
+            Password   = dlg.Password,
         };
 
         var appName = string.IsNullOrWhiteSpace(dlg.AppName)

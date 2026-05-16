@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
-# PiDbg capability detection script v1.
+# PiDbg capability detection script v2.
+# ROOT_FOLDER is injected by the caller before this script runs.
 # Outputs a single JSON object to stdout. All errors go to stderr.
 # Idempotent. Safe to run without sudo.
 set -uo pipefail
 
 SCHEMA=1
 TS=$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")
+
+# Expand ~ in ROOT_FOLDER and default if unset
+ROOT_FOLDER="${ROOT_FOLDER:-~/meadow}"
+ROOT_FOLDER="${ROOT_FOLDER/#\~/$HOME}"
 
 # ── Host ──────────────────────────────────────────────────────────────────────
 ARCH=$(uname -m 2>/dev/null || echo "")
@@ -27,15 +32,16 @@ loginctl show-user "$ME" --property=Linger 2>/dev/null | grep -q "=yes" \
     && LINGER=true || true
 
 # ── Filesystem ────────────────────────────────────────────────────────────────
-OPT_EXISTS=false; OPT_WRITABLE=false; FREE_BYTES=0
-if [ -d /opt/meadow ]; then
-    OPT_EXISTS=true
-    [ -w /opt/meadow ] && OPT_WRITABLE=true || true
-    FREE_BYTES=$(df -B1 /opt/meadow 2>/dev/null | awk 'NR==2{print $4+0}' || echo "0")
+ROOT_EXISTS=false; ROOT_WRITABLE=false; FREE_BYTES=0
+mkdir -p "$ROOT_FOLDER" 2>/dev/null || true
+if [ -d "$ROOT_FOLDER" ]; then
+    ROOT_EXISTS=true
+    [ -w "$ROOT_FOLDER" ] && ROOT_WRITABLE=true || true
+    FREE_BYTES=$(df -B1 "$ROOT_FOLDER" 2>/dev/null | awk 'NR==2{print $4+0}' || echo "0")
 fi
 
 # ── Daemon ────────────────────────────────────────────────────────────────────
-DAEMON_BIN=/opt/meadow/bin/meadow-daemon
+DAEMON_BIN="$ROOT_FOLDER/bin/meadow-daemon"
 D_EXISTS=false; D_VER=""; D_SHA256=""; SVC_INST=false; SVC_RUN=false
 if [ -f "$DAEMON_BIN" ]; then
     D_EXISTS=true
@@ -48,7 +54,7 @@ systemctl --user is-active meadow-daemon 2>/dev/null \
     | grep -q "^active"  && SVC_RUN=true  || true
 
 # ── vsdbg ─────────────────────────────────────────────────────────────────────
-VSDBG_BIN=/opt/meadow/vsdbg/vsdbg-ui
+VSDBG_BIN="$ROOT_FOLDER/vsdbg/vsdbg-ui"
 V_EXISTS=false; V_VER=""
 if [ -f "$VSDBG_BIN" ]; then
     V_EXISTS=true
@@ -79,9 +85,9 @@ printf '    "uid": %s,\n'            "$MY_UID"
 printf '    "linger": %s\n'          "$LINGER"
 printf '  },\n'
 printf '  "filesystem": {\n'
-printf '    "opt_meadow_exists": %s,\n'   "$OPT_EXISTS"
-printf '    "opt_meadow_writable": %s,\n' "$OPT_WRITABLE"
-printf '    "free_bytes_opt": %s\n'       "$FREE_BYTES"
+printf '    "root_exists": %s,\n'   "$ROOT_EXISTS"
+printf '    "root_writable": %s,\n' "$ROOT_WRITABLE"
+printf '    "free_bytes": %s\n'     "$FREE_BYTES"
 printf '  },\n'
 printf '  "daemon": {\n'
 printf '    "binary_exists": %s,\n'     "$D_EXISTS"

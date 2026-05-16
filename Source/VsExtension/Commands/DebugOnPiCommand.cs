@@ -34,6 +34,7 @@ internal sealed class DebugOnPiCommand
     private static void Execute(object sender, EventArgs e)
     {
         var pkg = PiDbgPackage.Current!;
+        PiDbgPackage.OutputWindow.Activate(OutputPane.PiDbg);
         pkg.JoinableTaskFactory.RunAsync(async () =>
         {
             try
@@ -57,10 +58,6 @@ internal sealed class DebugOnPiCommand
     private static async Task RunAsync(AsyncPackage pkg)
     {
         var output = PiDbgPackage.OutputWindow;
-
-        await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-        output.Activate(OutputPane.PiDbg);
-
         var ensurer = new PiDbgCapabilityEnsurer(pkg);
         var projectPath = await ensurer.GetProjectPathAsync(CancellationToken.None)
             .ConfigureAwait(false)
@@ -92,7 +89,7 @@ internal sealed class DebugOnPiCommand
         // Step 2: Provision (idempotent)
         output.WriteLine(OutputPane.PiDbg, "Provisioning...");
         var provision = await ProvisioningOrchestrator
-            .ProvisionAsync(session, PiDbgPackage.GrpcChannels, output, ct)
+            .ProvisionAsync(session, PiDbgPackage.GrpcChannels, output, config.RootFolder, ct)
             .ConfigureAwait(false);
 
         if (!provision.Success)

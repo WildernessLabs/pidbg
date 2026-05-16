@@ -28,9 +28,9 @@ internal sealed class DetectionHost
 
 internal sealed class DetectionFilesystem
 {
-    [JsonPropertyName("opt_meadow_exists")]   public bool OptMeadowExists   { get; set; }
-    [JsonPropertyName("opt_meadow_writable")] public bool OptMeadowWritable { get; set; }
-    [JsonPropertyName("free_bytes_opt")]      public long FreeBytesOpt      { get; set; }
+    [JsonPropertyName("root_exists")]   public bool RootExists   { get; set; }
+    [JsonPropertyName("root_writable")] public bool RootWritable { get; set; }
+    [JsonPropertyName("free_bytes")]    public long FreeBytes    { get; set; }
 }
 
 internal sealed class DetectionDaemon
