@@ -1,12 +1,11 @@
-using System;
 using System.IO;
-using System.Linq;
 using System.Reflection;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
+
 using Grpc.Core;
+
 using Meadow.Daemon.Contracts.V1;
+
 using PiDbg.Infrastructure;
 
 namespace PiDbg.Provisioning;
@@ -17,12 +16,12 @@ internal static class DaemonInstaller
 {
     // Populated at VSIX build time by a T4 or source generator stamping the bundled binary.
     // Placeholder values are safe: without RequiredSha256, the SHA check is skipped.
-    public const string RequiredVersion = "1.0.2";
-    public const string RequiredSha256  = "";
+    public const string RequiredVersion = "1.0.8";
+    public const string RequiredSha256 = "";
 
     public static DaemonInstallAction DetermineAction(DetectionResult detection)
     {
-        if (!detection.Daemon.BinaryExists)       return DaemonInstallAction.Install;
+        if (!detection.Daemon.BinaryExists) return DaemonInstallAction.Install;
         if (detection.Daemon.BinaryVersion == "") return DaemonInstallAction.Reinstall;
 
         if (!string.IsNullOrEmpty(RequiredSha256)
@@ -54,9 +53,8 @@ internal static class DaemonInstaller
                 "Please install the official release of the PiDbg extension.");
 
         // Expand ~ to absolute path — systemd and single-quoted SSH args don't expand it.
-        var username = session.Ssh.ConnectionInfo.Username;
-        var absRoot = ExpandTilde(rootFolder, username);
-        var binDir    = $"{absRoot}/bin";
+        var absRoot = session.ExpandPath(rootFolder);
+        var binDir = $"{absRoot}/bin";
         var daemonBin = $"{binDir}/meadow-daemon";
 
         // Ensure bin directory exists
@@ -94,7 +92,7 @@ internal static class DaemonInstaller
 
         progress.Report("Installing systemd service...");
         var serviceContent = RenderServiceTemplate(absRoot);
-        var serviceDir = $"/home/{username}/.config/systemd/user";
+        var serviceDir = session.ExpandPath("~/.config/systemd/user");
         await session.ExecuteAsync($"mkdir -p '{serviceDir}'", ct).ConfigureAwait(false);
         await UploadTextAsync(session, serviceContent,
             $"{serviceDir}/meadow-daemon.service", ct)
@@ -117,7 +115,7 @@ internal static class DaemonInstaller
     public static async Task<bool> WaitForHealthAsync(
         Channel channel, TimeSpan timeout, CancellationToken ct)
     {
-        var client   = new MeadowDaemonService.MeadowDaemonServiceClient(channel);
+        var client = new MeadowDaemonService.MeadowDaemonServiceClient(channel);
         var deadline = DateTimeOffset.UtcNow + timeout;
 
         while (DateTimeOffset.UtcNow < deadline)
@@ -129,9 +127,9 @@ internal static class DaemonInstaller
                              .ConfigureAwait(false);
                 return true;
             }
-            catch (Exception) 
-            { 
-                /* daemon not ready yet or tunnel not established */ 
+            catch (Exception)
+            {
+                /* daemon not ready yet or tunnel not established */
             }
             await Task.Delay(2000, ct).ConfigureAwait(false);
         }
@@ -142,16 +140,16 @@ internal static class DaemonInstaller
     {
         var template = LoadEmbeddedText("meadow-daemon.service.template");
         return template
-            .Replace("@@DAEMON_BIN@@",  $"{rootFolder}/bin/meadow-daemon")
+            .Replace("@@DAEMON_BIN@@", $"{rootFolder}/bin/meadow-daemon")
             .Replace("@@INSTALL_DIR@@", rootFolder)
-            .Replace("@@EXTRA_ARGS@@",  "")
+            .Replace("@@EXTRA_ARGS@@", "")
             .Replace("\r\n", "\n")
             .Replace("\r", "\n");
     }
 
     private static Stream? GetEmbeddedBinary()
     {
-        var asm  = Assembly.GetExecutingAssembly();
+        var asm = Assembly.GetExecutingAssembly();
         var name = asm.GetManifestResourceNames()
             .FirstOrDefault(n => n.EndsWith("meadow-daemon", StringComparison.Ordinal));
         return name is null ? null : asm.GetManifestResourceStream(name);
@@ -159,7 +157,7 @@ internal static class DaemonInstaller
 
     private static long GetBinarySize()
     {
-        var asm  = Assembly.GetExecutingAssembly();
+        var asm = Assembly.GetExecutingAssembly();
         var name = asm.GetManifestResourceNames()
             .FirstOrDefault(n => n.EndsWith("meadow-daemon", StringComparison.Ordinal));
         if (name is null) return 0;
@@ -169,7 +167,7 @@ internal static class DaemonInstaller
 
     private static string LoadEmbeddedText(string resourceSuffix)
     {
-        var asm  = Assembly.GetExecutingAssembly();
+        var asm = Assembly.GetExecutingAssembly();
         var name = asm.GetManifestResourceNames()
             .First(n => n.EndsWith(resourceSuffix, StringComparison.OrdinalIgnoreCase));
         using var stream = asm.GetManifestResourceStream(name)!;
@@ -183,13 +181,6 @@ internal static class DaemonInstaller
         var bytes = Encoding.UTF8.GetBytes(content);
         using var stream = new MemoryStream(bytes);
         await session.UploadFileAsync(stream, remotePath, null, ct).ConfigureAwait(false);
-    }
-
-    private static string ExpandTilde(string path, string username)
-    {
-        if (path == "~")            return $"/home/{username}";
-        if (path.StartsWith("~/")) return $"/home/{username}/{path.Substring(2)}";
-        return path;
     }
 
     private static bool IsVersionLessThan(string installed, string required)

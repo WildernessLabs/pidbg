@@ -1,7 +1,9 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Reflection;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Grpc.Core;
@@ -13,7 +15,9 @@ namespace PiDbg.Provisioning;
 internal static class VsdbgInstallClient
 {
     public const string RequiredVsdbgMin = "17.0.0";
-    public const string PreferredVsdbg   = "17.12.11230";
+    public const string PreferredVsdbg   = "latest";
+
+    private const string GetVsDbgShUrl = "https://aka.ms/getvsdbgsh";
 
     public static bool NeedsInstall(DetectionResult detection)
     {
@@ -26,23 +30,53 @@ internal static class VsdbgInstallClient
     public static async Task InstallAsync(
         SshSession session,
         Channel channel,
-        bool curlAvailable,
+        string rootFolder,
         IProgress<string> progress,
         CancellationToken ct)
     {
+        rootFolder = session.ExpandPath(rootFolder);
         var client = new MeadowDaemonService.MeadowDaemonServiceClient(channel);
+        var errors = new StringBuilder();
 
-        if (curlAvailable)
+        // 1. Pi-side online install — daemon uses HttpClient + GetVsDbg.sh
         {
-            var succeeded = await TryOnlineInstallAsync(client, progress, ct).ConfigureAwait(false);
+            var (succeeded, error) = await TryOnlineInstallAsync(client, progress, ct).ConfigureAwait(false);
             if (succeeded) return;
+            if (error != null) errors.AppendLine($"- Pi-side: {error}");
         }
 
-        progress.Report("Using offline tarball for vsdbg installation...");
-        await OfflineTarballInstallAsync(session, client, progress, ct).ConfigureAwait(false);
+        // 2. SSH script install — dev machine downloads GetVsDbg.sh, uploads and runs it on Pi.
+        {
+            var (succeeded, error) = await TrySshScriptInstallAsync(
+                session, rootFolder, progress, ct).ConfigureAwait(false);
+            if (succeeded) return;
+            if (error != null) errors.AppendLine($"- VSIX-side: {error}");
+        }
+
+        // 3. Bundled offline tarball — for fully air-gapped scenarios
+        var tarball = GetEmbeddedTarball();
+        if (tarball is null)
+        {
+            var msg = new StringBuilder();
+            msg.AppendLine("vsdbg installation failed across all methods:");
+            msg.Append(errors.ToString());
+            msg.AppendLine("- Offline: No bundled tarball found in VSIX.");
+            msg.AppendLine();
+            msg.AppendLine("Common causes:");
+            msg.AppendLine("1. Raspberry Pi has no internet (Pi-side failed).");
+            msg.AppendLine("2. Dev machine has no internet or aka.ms is blocked (VSIX-side failed).");
+            msg.AppendLine("3. Firewall or proxy is blocking HTTPS traffic.");
+            
+            throw new ProvisioningException(msg.ToString());
+        }
+
+        progress.Report("Using bundled offline tarball for vsdbg installation...");
+        await UploadAndInstallTarballAsync(
+            session, client, tarball, GetEmbeddedTarballSha256(), rootFolder, progress, ct)
+            .ConfigureAwait(false);
     }
 
-    private static async Task<bool> TryOnlineInstallAsync(
+    private static async Task<(bool Success, string? Error)> TryOnlineInstallAsync(
         MeadowDaemonService.MeadowDaemonServiceClient client,
         IProgress<string> progress, CancellationToken ct)
     {
@@ -52,47 +86,95 @@ internal static class VsdbgInstallClient
                 new InstallVsdbgRequest { Version = PreferredVsdbg },
                 cancellationToken: ct);
 
-            // Grpc.Core uses MoveNext/Current — not IAsyncEnumerable
+            string? lastError = null;
             while (await call.ResponseStream.MoveNext(ct).ConfigureAwait(false))
             {
                 var msg = call.ResponseStream.Current;
                 if (!string.IsNullOrEmpty(msg.StatusMessage))
                     progress.Report(msg.StatusMessage);
                 if (msg.Success)
-                    return true;
+                    return (true, null);
                 if (!string.IsNullOrEmpty(msg.ErrorMessage))
                 {
-                    progress.Report($"Online install failed: {msg.ErrorMessage}. Falling back to tarball.");
-                    return false;
+                    lastError = msg.ErrorMessage;
+                    progress.Report($"Pi-side install failed: {lastError}. Trying VSIX download...");
                 }
             }
-            return true;
+            return (false, lastError ?? "Unknown daemon failure");
         }
         catch (RpcException ex)
         {
-            progress.Report($"Online install failed: {ex.Status.Detail}. Falling back to tarball.");
-            return false;
+            var err = ex.Status.Detail;
+            progress.Report($"Pi-side install failed: {err}. Trying VSIX download...");
+            return (false, err);
         }
     }
 
-    private static async Task OfflineTarballInstallAsync(
+    private static async Task<(bool Success, string? Error)> TrySshScriptInstallAsync(
+        SshSession session,
+        string rootFolder,
+        IProgress<string> progress,
+        CancellationToken ct)
+    {
+        try
+        {
+            progress.Report("Downloading GetVsDbg.sh from Microsoft...");
+            using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
+            var script = await http.GetStringAsync(GetVsDbgShUrl).ConfigureAwait(false);
+
+            var tmpDir    = $"{rootFolder}/tmp";
+            var scriptPath = $"{tmpDir}/GetVsDbg.sh";
+            var vsdbgDir   = $"{rootFolder}/vsdbg";
+
+            await session.ExecuteAsync($"mkdir -p '{tmpDir}'", ct).ConfigureAwait(false);
+
+            var scriptBytes = Encoding.UTF8.GetBytes(script.Replace("\r\n", "\n"));
+            using (var stream = new MemoryStream(scriptBytes))
+                await session.UploadFileAsync(stream, scriptPath, null, ct).ConfigureAwait(false);
+
+            progress.Report($"Running GetVsDbg.sh on device (version {PreferredVsdbg})...");
+            var cmd = $"chmod +x '{scriptPath}' && " +
+                      $"bash '{scriptPath}' -v {PreferredVsdbg} -r linux-arm64 -l '{vsdbgDir}'";
+            var (rc, stdout, stderr) = await session
+                .ExecuteAsync(cmd, TimeSpan.FromMinutes(10), ct).ConfigureAwait(false);
+
+            if (!string.IsNullOrWhiteSpace(stdout)) progress.Report(stdout.Trim());
+            if (!string.IsNullOrWhiteSpace(stderr)) progress.Report($"  {stderr.Trim()}");
+
+            await session.ExecuteAsync($"rm -f '{scriptPath}'", ct).ConfigureAwait(false);
+
+            if (rc != 0)
+            {
+                var err = string.IsNullOrWhiteSpace(stderr) ? stdout : stderr;
+                progress.Report($"GetVsDbg.sh failed (exit {rc}). Trying bundled tarball...");
+                return (false, $"Script exited with code {rc}: {err}");
+            }
+
+            progress.Report("vsdbg installed successfully.");
+            return (true, null);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            progress.Report($"SSH script install failed: {ex.Message}. Trying bundled tarball...");
+            return (false, ex.Message);
+        }
+    }
+
+    private static async Task UploadAndInstallTarballAsync(
         SshSession session,
         MeadowDaemonService.MeadowDaemonServiceClient client,
-        IProgress<string> progress, CancellationToken ct)
+        Stream tarball,
+        string sha256,
+        string rootFolder,
+        IProgress<string> progress,
+        CancellationToken ct)
     {
-        var tarball = GetEmbeddedTarball();
-        if (tarball is null)
-            throw new ProvisioningException(
-                "vsdbg offline tarball not bundled in this VSIX. " +
-                "Ensure the device has internet access for online installation, " +
-                "or install the full PiDbg release that bundles the tarball.");
+        var tmpDir = $"{rootFolder}/tmp";
+        var remoteTarPath = $"{tmpDir}/vsdbg-linux-arm64.tar.gz";
 
-        const string remoteTarPath = "/opt/meadow/tmp/vsdbg-linux-arm64.tar.gz";
+        await session.ExecuteAsync($"mkdir -p '{tmpDir}'", ct).ConfigureAwait(false);
 
-        // Ensure tmp dir exists
-        await session.ExecuteAsync("mkdir -p /opt/meadow/tmp", ct).ConfigureAwait(false);
-
-        progress.Report("Uploading vsdbg tarball via SFTP...");
+        progress.Report("Uploading vsdbg tarball...");
         using (tarball)
         {
             var lastMb = -1L;
@@ -107,8 +189,6 @@ internal static class VsdbgInstallClient
         }
 
         progress.Report("Installing vsdbg from tarball...");
-        var sha256 = GetEmbeddedTarballSha256();
-
         var response = await client.UploadVsdbgTarballAsync(
             new UploadVsdbgTarballRequest
             {
@@ -119,10 +199,9 @@ internal static class VsdbgInstallClient
             cancellationToken: ct).ConfigureAwait(false);
 
         if (!response.Success)
-            throw new ProvisioningException(
-                $"vsdbg tarball installation failed: {response.ErrorMessage}");
+            throw new ProvisioningException($"vsdbg tarball installation failed: {response.ErrorMessage}");
 
-        await session.ExecuteAsync($"rm -f {remoteTarPath}", ct).ConfigureAwait(false);
+        await session.ExecuteAsync($"rm -f '{remoteTarPath}'", ct).ConfigureAwait(false);
         progress.Report("vsdbg installed successfully.");
     }
 

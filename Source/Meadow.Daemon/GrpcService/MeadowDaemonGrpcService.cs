@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using System.Text.Json;
 using Grpc.Core;
 using Microsoft.Extensions.Options;
@@ -382,6 +383,7 @@ public sealed class MeadowDaemonGrpcService : MeadowDaemonService.MeadowDaemonSe
         };
     }
 
+    [SupportedOSPlatform("linux")]
     public override async Task InstallVsdbg(InstallVsdbgRequest request, IServerStreamWriter<InstallVsdbgProgress> responseStream, ServerCallContext context)
     {
         LogCall(nameof(InstallVsdbg), context);
@@ -402,6 +404,7 @@ public sealed class MeadowDaemonGrpcService : MeadowDaemonService.MeadowDaemonSe
         }
     }
 
+    [SupportedOSPlatform("linux")]
     public override async Task<UploadVsdbgTarballResponse> UploadVsdbgTarball(UploadVsdbgTarballRequest request, ServerCallContext context)
     {
         LogCall(nameof(UploadVsdbgTarball), context);

@@ -79,7 +79,7 @@ internal sealed class DebugOnPiCommand
             throw new InvalidOperationException(
                 "Pi host is not configured. Use 'Pi Debugger → Connect to Pi...' first.");
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(15));
         var ct = cts.Token;
 
         output.WriteLine(OutputPane.PiDbg, $"=== PiDbg: {appName} on {config.Host} ===");

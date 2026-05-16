@@ -142,7 +142,7 @@ internal static class ProvisioningOrchestrator
             try
             {
                 await VsdbgInstallClient.InstallAsync(
-                    session, channel, detection.Runtime.CurlAvailable, vsdbgProg, ct)
+                    session, channel, rootFolder, vsdbgProg, ct)
                     .ConfigureAwait(false);
                 steps.Add(MakeStep("vsdbg install", true, "installed"));
             }

@@ -1,6 +1,9 @@
 using System.Diagnostics;
-using System.Security.Cryptography;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
+using System.Security.Cryptography;
+using System.Text;
+
 using Microsoft.Extensions.Options;
 
 namespace Meadow.Daemon.Services;
@@ -29,37 +32,41 @@ internal class VsdbgInstaller : IVsdbgInstaller
         var version = GetInstalledVersion();
         if (version is null) return Task.FromResult(false);
         if (!File.Exists(DaemonPaths.VsdbgBinPath(_options))) return Task.FromResult(false);
-        
+
         return Task.FromResult(VersionSatisfies(version, requiredVersion));
     }
 
+    [SupportedOSPlatform("linux")]
     public async Task InstallAsync(string version, IProgress<string> progress, CancellationToken ct)
     {
-        progress.Report($"Downloading GetVsDbg.sh...");
         var scriptPath = Path.Combine(DaemonPaths.TempDir(), "GetVsDbg.sh");
-
-        using var http = new HttpClient();
-        var script = await http.GetStringAsync("https://aka.ms/getvsdbgsh", ct);
-        
         Directory.CreateDirectory(Path.GetDirectoryName(scriptPath)!);
-        await File.WriteAllTextAsync(scriptPath, script, ct);
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-        {
-            Mono.Unix.Native.Syscall.chmod(scriptPath, Mono.Unix.Native.FilePermissions.S_IRWXU);
-        }
+        // 1. Try downloading GetVsDbg.sh
+        var downloaded = await TryDownloadScriptAsync(scriptPath, progress, ct);
+        if (!downloaded)
+            throw new VsdbgInstallException("Failed to download GetVsDbg.sh via HttpClient, wget, or curl.");
+
+        File.SetUnixFileMode(scriptPath,
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
 
         var vsdbgDir = DaemonPaths.VsdbgDir(_options);
-        var args     = $"-Version {version} -RuntimeID linux-arm64 -InstallPath {vsdbgDir}";
 
-        progress.Report($"Running GetVsDbg.sh {args}...");
-        
-        var startInfo = new ProcessStartInfo("bash", $"{scriptPath} {args}")
+        progress.Report($"Running GetVsDbg.sh -v {version} -r linux-arm64 -l {vsdbgDir}...");
+
+        var startInfo = new ProcessStartInfo("bash")
         {
             RedirectStandardOutput = true,
-            RedirectStandardError  = true,
-            UseShellExecute        = false,
+            RedirectStandardError = true,
+            UseShellExecute = false,
         };
+        startInfo.ArgumentList.Add(scriptPath);
+        startInfo.ArgumentList.Add("-v");
+        startInfo.ArgumentList.Add(version);
+        startInfo.ArgumentList.Add("-r");
+        startInfo.ArgumentList.Add("linux-arm64");
+        startInfo.ArgumentList.Add("-l");
+        startInfo.ArgumentList.Add(vsdbgDir);
 
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
@@ -67,21 +74,82 @@ internal class VsdbgInstaller : IVsdbgInstaller
         }
 
         var process = new Process { StartInfo = startInfo };
-        process.OutputDataReceived += (_, e) => { if (e.Data != null) progress.Report(e.Data); };
-        process.ErrorDataReceived  += (_, e) => { if (e.Data != null) progress.Report($"ERR: {e.Data}"); };
-        
+        var outputBuilder = new StringBuilder();
+        process.OutputDataReceived += (_, e) => { if (e.Data != null) { progress.Report(e.Data); outputBuilder.AppendLine(e.Data); } };
+        process.ErrorDataReceived  += (_, e) => { if (e.Data != null) { progress.Report("ERR: " + e.Data); outputBuilder.Append("ERR: ").AppendLine(e.Data); } };
+
         process.Start();
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
-        
+
         await process.WaitForExitAsync(ct);
 
         if (process.ExitCode != 0)
+        {
+            var log = outputBuilder.ToString();
+            _logger.LogError("GetVsDbg.sh failed with code {Code}. Log: {Log}", process.ExitCode, log);
             throw new VsdbgInstallException($"GetVsDbg.sh failed with exit code {process.ExitCode}");
+        }
 
         progress.Report("vsdbg installed successfully.");
     }
 
+    private async Task<bool> TryDownloadScriptAsync(string path, IProgress<string> progress, CancellationToken ct)
+    {
+        const string url = "https://aka.ms/getvsdbgsh";
+
+        // Attempt 1: HttpClient
+        try
+        {
+            progress.Report("Downloading GetVsDbg.sh (HttpClient)...");
+            using var http = new HttpClient();
+            var script = await http.GetStringAsync(url, ct);
+            await File.WriteAllTextAsync(path, script, ct);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "HttpClient download of GetVsDbg.sh failed");
+        }
+
+        // Attempt 2: wget
+        try
+        {
+            progress.Report("Downloading GetVsDbg.sh (wget)...");
+            var psi = new ProcessStartInfo("wget", $"-q \"{url}\" -O \"{path}\"") { UseShellExecute = false };
+            var p = Process.Start(psi);
+            if (p != null)
+            {
+                await p.WaitForExitAsync(ct);
+                if (p.ExitCode == 0 && File.Exists(path)) return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "wget download of GetVsDbg.sh failed");
+        }
+
+        // Attempt 3: curl
+        try
+        {
+            progress.Report("Downloading GetVsDbg.sh (curl)...");
+            var psi = new ProcessStartInfo("curl", $"-fSL \"{url}\" -o \"{path}\"") { UseShellExecute = false };
+            var p = Process.Start(psi);
+            if (p != null)
+            {
+                await p.WaitForExitAsync(ct);
+                if (p.ExitCode == 0 && File.Exists(path)) return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "curl download of GetVsDbg.sh failed");
+        }
+
+        return false;
+    }
+
+    [SupportedOSPlatform("linux")]
     public async Task InstallFromTarballAsync(
         Stream tarball, string expectedSha256,
         IProgress<string> progress, CancellationToken ct)
@@ -93,13 +161,16 @@ internal class VsdbgInstaller : IVsdbgInstaller
         await using (var fs = File.Create(tarPath))
             await tarball.CopyToAsync(fs, ct);
 
-        // Verify integrity
-        progress.Report("Verifying tarball integrity...");
-        var actualSha256 = await ComputeSha256Async(tarPath, ct);
-        if (!string.Equals(actualSha256, expectedSha256, StringComparison.OrdinalIgnoreCase))
+        // Verify integrity (skip if no expected hash provided)
+        if (!string.IsNullOrEmpty(expectedSha256))
         {
-            File.Delete(tarPath);
-            throw new VsdbgInstallException($"Tarball SHA-256 mismatch. Expected: {expectedSha256}, got: {actualSha256}");
+            progress.Report("Verifying tarball integrity...");
+            var actualSha256 = await ComputeSha256Async(tarPath, ct);
+            if (!string.Equals(actualSha256, expectedSha256, StringComparison.OrdinalIgnoreCase))
+            {
+                File.Delete(tarPath);
+                throw new VsdbgInstallException($"Tarball SHA-256 mismatch. Expected: {expectedSha256}, got: {actualSha256}");
+            }
         }
 
         // Extract
@@ -121,10 +192,10 @@ internal class VsdbgInstaller : IVsdbgInstaller
                 RedirectStandardError = true,
             }
         };
-        
+
         extract.Start();
         await extract.WaitForExitAsync(ct);
-        
+
         if (extract.ExitCode != 0)
         {
             var err = await extract.StandardError.ReadToEndAsync(ct);
@@ -135,10 +206,9 @@ internal class VsdbgInstaller : IVsdbgInstaller
         var binPath = DaemonPaths.VsdbgBinPath(_options);
         if (File.Exists(binPath))
         {
-            Mono.Unix.Native.Syscall.chmod(binPath,
-                Mono.Unix.Native.FilePermissions.S_IRWXU | 
-                Mono.Unix.Native.FilePermissions.S_IRGRP | 
-                Mono.Unix.Native.FilePermissions.S_IXGRP);
+            File.SetUnixFileMode(binPath,
+                UnixFileMode.UserRead  | UnixFileMode.UserWrite  | UnixFileMode.UserExecute |
+                UnixFileMode.GroupRead | UnixFileMode.GroupExecute);
         }
 
         File.Delete(tarPath);

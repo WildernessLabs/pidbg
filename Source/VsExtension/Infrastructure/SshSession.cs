@@ -23,12 +23,16 @@ public sealed class SshSession : IDisposable
         Host = host;
     }
 
-    public async Task<(int ExitCode, string Stdout, string Stderr)>
+    public Task<(int ExitCode, string Stdout, string Stderr)>
         ExecuteAsync(string command, CancellationToken ct)
+        => ExecuteAsync(command, TimeSpan.FromSeconds(30), ct);
+
+    public async Task<(int ExitCode, string Stdout, string Stderr)>
+        ExecuteAsync(string command, TimeSpan timeout, CancellationToken ct)
     {
         using (var cmd = Ssh.CreateCommand(command))
         {
-            cmd.CommandTimeout = TimeSpan.FromSeconds(30);
+            cmd.CommandTimeout = timeout;
             await Task.Run(() => cmd.Execute(), ct).ConfigureAwait(false);
             return (cmd.ExitStatus ?? -1, cmd.Result, cmd.Error);
         }
@@ -88,6 +92,14 @@ public sealed class SshSession : IDisposable
                 catch { /* concurrent creation from another upload — ignore */ }
             }
         }
+    }
+
+    public string ExpandPath(string path)
+    {
+        var user = Ssh.ConnectionInfo.Username;
+        if (path == "~")           return $"/home/{user}";
+        if (path.StartsWith("~/")) return $"/home/{user}/{path.Substring(2)}";
+        return path;
     }
 
     private static string LinuxDirName(string remotePath)
