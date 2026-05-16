@@ -100,7 +100,7 @@ internal static class VsdbgInstallClient
                 tarball, remoteTarPath,
                 new Progress<long>(bytes =>
                 {
-                    var mb = bytes / 1024 / 1024;
+                    var mb = bytes / 1024 / 1024 / 5 * 5;
                     if (mb != lastMb) { lastMb = mb; progress.Report($"  {mb} MB uploaded..."); }
                 }),
                 ct).ConfigureAwait(false);

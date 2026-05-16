@@ -17,7 +17,7 @@ internal static class DaemonInstaller
 {
     // Populated at VSIX build time by a T4 or source generator stamping the bundled binary.
     // Placeholder values are safe: without RequiredSha256, the SHA check is skipped.
-    public const string RequiredVersion = "1.0.0";
+    public const string RequiredVersion = "1.0.2";
     public const string RequiredSha256  = "";
 
     public static DaemonInstallAction DetermineAction(DetectionResult detection)
@@ -80,7 +80,7 @@ internal static class DaemonInstaller
                 $"{daemonBin}.new",
                 new Progress<long>(bytes =>
                 {
-                    var mb = bytes / 1024 / 1024;
+                    var mb = bytes / 1024 / 1024 / 5 * 5;
                     if (mb != lastMb) { lastMb = mb; progress.Report($"  {mb} MB uploaded..."); }
                 }),
                 ct).ConfigureAwait(false);

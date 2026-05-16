@@ -66,10 +66,10 @@ public sealed class MeadowDaemonGrpcService : MeadowDaemonService.MeadowDaemonSe
 
     public override Task<PongResponse> Ping(PingRequest request, ServerCallContext context)
     {
-        LogCall(nameof(Ping), context);
+        Console.WriteLine($"[gRPC] Ping called from {context.Peer}");
         return Task.FromResult(new PongResponse
         {
-            Version = BuildDaemonVersion(),
+            Version = new DaemonVersion { Version = "1.0.0", ProtocolVersion = 1 },
             TimestampMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
         });
     }

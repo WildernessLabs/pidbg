@@ -8,6 +8,28 @@ using Meadow.Daemon.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ── CLI Arguments ─────────────────────────────────────────────────────────────
+
+if (args.Contains("--version") || args.Contains("-v"))
+{
+    var v = Assembly.GetExecutingAssembly()
+                    .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+                    ?.InformationalVersion ?? "1.0.0";
+    Console.WriteLine(v);
+    return;
+}
+
+if (args.Contains("--help") || args.Contains("-h"))
+{
+    Console.WriteLine("Meadow Daemon");
+    Console.WriteLine("Usage: meadow-daemon [options]");
+    Console.WriteLine();
+    Console.WriteLine("Options:");
+    Console.WriteLine("  --version, -v  Show version information");
+    Console.WriteLine("  --help, -h     Show help information");
+    return;
+}
+
 // ── Configuration ─────────────────────────────────────────────────────────────
 
 builder.Configuration
@@ -50,7 +72,8 @@ builder.Services.AddSingleton<StagingController>();
 builder.Services.AddSingleton<ManifestVerifier>();
 builder.Services.AddSingleton<IDeploymentManager, DeploymentManager>();
 builder.Services.AddSingleton<IProcessManager, ProcessManager>();
-builder.Services.AddSingleton<IVsdbgInstaller, VsdbgInstaller>();
+builder.Services.AddSingleton<VsdbgInstaller>();
+builder.Services.AddSingleton<IVsdbgInstaller>(sp => sp.GetRequiredService<VsdbgInstaller>());
 builder.Services.AddSingleton<VsdbgManager>();
 builder.Services.AddSingleton<VsdbgLauncher>();
 builder.Services.AddSingleton<IDebugSessionManager, DebugSessionManager>();
@@ -63,7 +86,7 @@ builder.Services.AddHostedService<OtaUpdateService>();
 // gRPC
 builder.Services.AddGrpc(o =>
 {
-    o.EnableDetailedErrors = builder.Environment.IsDevelopment();
+    o.EnableDetailedErrors = true;
     o.MaxReceiveMessageSize = 64 * 1024 * 1024;  // 64 MB for binary uploads
     o.MaxSendMessageSize    = 64 * 1024 * 1024;
 });
@@ -129,6 +152,7 @@ var version = Assembly.GetExecutingAssembly()
                       .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
                       ?.InformationalVersion ?? "1.0.0";
 
+Console.WriteLine($"Meadow Daemon {version} starting on gRPC:{daemonOptions.GrpcPort} REST:{daemonOptions.RestPort}");
 logger.LogInformation("Meadow Daemon {Version} starting on gRPC:{GrpcPort} REST:{RestPort}",
     version, daemonOptions.GrpcPort, daemonOptions.RestPort);
 
