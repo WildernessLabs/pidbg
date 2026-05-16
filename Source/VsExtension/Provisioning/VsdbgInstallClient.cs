@@ -95,10 +95,14 @@ internal static class VsdbgInstallClient
         progress.Report("Uploading vsdbg tarball via SFTP...");
         using (tarball)
         {
+            var lastMb = -1L;
             await session.UploadFileAsync(
                 tarball, remoteTarPath,
                 new Progress<long>(bytes =>
-                    progress.Report($"  {bytes / 1024 / 1024} MB uploaded...")),
+                {
+                    var mb = bytes / 1024 / 1024;
+                    if (mb != lastMb) { lastMb = mb; progress.Report($"  {mb} MB uploaded..."); }
+                }),
                 ct).ConfigureAwait(false);
         }
 

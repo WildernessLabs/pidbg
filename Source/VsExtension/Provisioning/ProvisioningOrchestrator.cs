@@ -33,11 +33,13 @@ internal static class ProvisioningOrchestrator
         var steps = new List<ProvisioningStep>();
 
         // --- Step 1: Capability Detection ---
-        output.WriteLine(OutputPane.Provisioning, "[1/7] Detecting device capabilities...");
+        output.WriteLine(OutputPane.PiDbg, "[1/7] Detecting device capabilities...");
         DetectionResult detection;
         try
         {
             detection = await CapabilityDetector.DetectAsync(session, rootFolder, ct).ConfigureAwait(false);
+            output.WriteLine(OutputPane.PiDbg,
+                $"  Host: {detection.Host.OsPretty} ({detection.Host.Arch})");
             steps.Add(MakeStep("Detection", true,
                 $"Host: {detection.Host.OsPretty} ({detection.Host.Arch})"));
         }
@@ -47,10 +49,10 @@ internal static class ProvisioningOrchestrator
         }
 
         // --- Step 2: Platform Validation ---
-        output.WriteLine(OutputPane.Provisioning, "[2/7] Validating platform...");
+        output.WriteLine(OutputPane.PiDbg, "[2/7] Validating platform...");
         var report = PlatformValidator.Validate(detection, rootFolder);
         foreach (var item in report.Items)
-            output.WriteLine(OutputPane.Provisioning,
+            output.WriteLine(OutputPane.PiDbg,
                 $"  [{(item.Passed ? "OK" : item.IsFatal ? "FAIL" : "WARN")}] " +
                 $"{item.Check}: {item.Message}");
 
@@ -63,20 +65,20 @@ internal static class ProvisioningOrchestrator
             $"{report.Warnings.Count} warning(s)"));
 
         // --- Step 3: Daemon install ---
-        output.WriteLine(OutputPane.Provisioning, "[3/7] Checking daemon...");
+        output.WriteLine(OutputPane.PiDbg, "[3/7] Checking daemon...");
         var action = DaemonInstaller.DetermineAction(detection);
 
         if (action == DaemonInstallAction.None)
         {
-            output.WriteLine(OutputPane.Provisioning,
+            output.WriteLine(OutputPane.PiDbg,
                 $"  Daemon {detection.Daemon.BinaryVersion} is current (no action needed)");
             steps.Add(MakeStep("Daemon", true, "up to date", skipped: true));
         }
         else
         {
-            output.WriteLine(OutputPane.Provisioning, $"  Action required: {action}");
+            output.WriteLine(OutputPane.PiDbg, $"  Action required: {action}");
             var prog = new Progress<string>(
-                msg => output.WriteLine(OutputPane.Provisioning, $"  {msg}"));
+                msg => output.WriteLine(OutputPane.PiDbg, $"  {msg}"));
             try
             {
                 await DaemonInstaller.InstallAsync(session, action, rootFolder, prog, ct).ConfigureAwait(false);
@@ -89,7 +91,7 @@ internal static class ProvisioningOrchestrator
         }
 
         // --- Step 4: Open gRPC channel ---
-        output.WriteLine(OutputPane.Provisioning, "[4/7] Connecting to daemon...");
+        output.WriteLine(OutputPane.PiDbg, "[4/7] Connecting to daemon...");
         Channel channel;
         try
         {
@@ -102,7 +104,7 @@ internal static class ProvisioningOrchestrator
         steps.Add(MakeStep("gRPC channel", true, "connected"));
 
         // --- Step 5: Health check ---
-        output.WriteLine(OutputPane.Provisioning, "[5/7] Waiting for daemon health...");
+        output.WriteLine(OutputPane.PiDbg, "[5/7] Waiting for daemon health...");
         var startupTimeout = action == DaemonInstallAction.None
             ? TimeSpan.FromSeconds(10)   // already running — should be immediate
             : TimeSpan.FromSeconds(60);  // fresh install: first-run .NET extraction can be slow
@@ -113,31 +115,30 @@ internal static class ProvisioningOrchestrator
             var (_, status, _) = await session.ExecuteAsync(
                 "systemctl --user status meadow-daemon --no-pager -l 2>&1 | tail -30",
                 ct).ConfigureAwait(false);
-            output.WriteLine(OutputPane.Provisioning,
-                $"Daemon status:\n{status}");
+            output.WriteLine(OutputPane.PiDbg, $"Daemon status:\n{status}");
             return Fail(steps, "Daemon health",
-                $"Daemon did not become healthy within 10 seconds.\n{status}");
+                $"Daemon did not become healthy within {startupTimeout.TotalSeconds} seconds.\n{status}");
         }
         steps.Add(MakeStep("Daemon health", true, "OK"));
 
         // --- Step 6: Version negotiation ---
-        output.WriteLine(OutputPane.Provisioning, "[6/7] Negotiating protocol version...");
+        output.WriteLine(OutputPane.PiDbg, "[6/7] Negotiating protocol version...");
         var nego = await VersionNegotiator.NegotiateAsync(channel, ct).ConfigureAwait(false);
         if (!nego.Compatible)
             return Fail(steps, "Version negotiation", nego.Error ?? "Protocol incompatible");
 
         if (nego.UpgradeRecommended)
-            output.WriteWarning(OutputPane.Provisioning,
+            output.WriteWarning(OutputPane.PiDbg,
                 "  Daemon upgrade recommended. Run PiDbg: Repair Connection to update.");
 
         steps.Add(MakeStep("Version negotiation", true, $"proto v{nego.ProtoVersion}"));
 
         // --- Step 7: vsdbg ---
-        output.WriteLine(OutputPane.Provisioning, "[7/7] Checking vsdbg...");
+        output.WriteLine(OutputPane.PiDbg, "[7/7] Checking vsdbg...");
         if (VsdbgInstallClient.NeedsInstall(detection))
         {
             var vsdbgProg = new Progress<string>(
-                msg => output.WriteLine(OutputPane.Provisioning, $"  {msg}"));
+                msg => output.WriteLine(OutputPane.PiDbg, $"  {msg}"));
             try
             {
                 await VsdbgInstallClient.InstallAsync(
@@ -152,7 +153,7 @@ internal static class ProvisioningOrchestrator
         }
         else
         {
-            output.WriteLine(OutputPane.Provisioning,
+            output.WriteLine(OutputPane.PiDbg,
                 $"  vsdbg {detection.Vsdbg.Version} is current");
             steps.Add(MakeStep("vsdbg", true, "up to date", skipped: true));
         }
@@ -166,7 +167,7 @@ internal static class ProvisioningOrchestrator
         };
 
         var executedCount = steps.Count(s => !s.Skipped);
-        output.WriteLine(OutputPane.Provisioning,
+        output.WriteLine(OutputPane.PiDbg,
             $"Provisioning complete ({executedCount} step(s) executed).");
 
         return new ProvisioningResult { Success = true, Steps = steps, Channel = channel };

@@ -74,11 +74,15 @@ internal static class DaemonInstaller
         progress.Report($"Uploading meadow-daemon ({sizeMb} MB)...");
         using (binaryStream)
         {
+            var lastMb = -1L;
             await session.UploadFileAsync(
                 binaryStream,
                 $"{daemonBin}.new",
                 new Progress<long>(bytes =>
-                    progress.Report($"  {bytes / 1024 / 1024} MB uploaded...")),
+                {
+                    var mb = bytes / 1024 / 1024;
+                    if (mb != lastMb) { lastMb = mb; progress.Report($"  {mb} MB uploaded..."); }
+                }),
                 ct).ConfigureAwait(false);
         }
 
@@ -125,7 +129,10 @@ internal static class DaemonInstaller
                              .ConfigureAwait(false);
                 return true;
             }
-            catch (RpcException) { /* daemon not ready yet */ }
+            catch (Exception) 
+            { 
+                /* daemon not ready yet or tunnel not established */ 
+            }
             await Task.Delay(2000, ct).ConfigureAwait(false);
         }
         return false;

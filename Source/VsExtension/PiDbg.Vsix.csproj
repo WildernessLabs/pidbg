@@ -66,10 +66,17 @@
     <EmbeddedResource Include="Resources\detect.sh" />
     <EmbeddedResource Include="Resources\version-manifest.json" />
     <EmbeddedResource Include="Resources\meadow-daemon.service.template" />
-    <!-- Conditional: daemon binary and vsdbg tarball are not bundled in dev builds -->
-    <EmbeddedResource Condition="Exists('Resources\meadow-daemon')" Include="Resources\meadow-daemon" />
+    <!-- Bundled daemon binary -->
+    <EmbeddedResource Include="Resources\meadow-daemon" />
     <EmbeddedResource Condition="Exists('Resources\vsdbg-linux-arm64.tar.gz')" Include="Resources\vsdbg-linux-arm64.tar.gz" />
     <EmbeddedResource Condition="Exists('Resources\vsdbg-linux-arm64.tar.gz.sha256')" Include="Resources\vsdbg-linux-arm64.tar.gz.sha256" />
   </ItemGroup>
+
+  <!-- Pre-build step to package the daemon -->
+  <Target Name="PackageDaemon" BeforeTargets="PrepareForBuild">
+    <Message Importance="high" Text="Packaging Meadow.Daemon for bundling..." />
+    <MSBuild Projects="..\Meadow.Daemon\Meadow.Daemon.csproj" Targets="Publish" Properties="Configuration=$(Configuration);RuntimeIdentifier=linux-arm64;PublishSingleFile=true;SelfContained=true" />
+    <Copy SourceFiles="..\Meadow.Daemon\bin\$(Configuration)\net9.0\linux-arm64\publish\meadow-daemon" DestinationFiles="Resources\meadow-daemon" SkipUnchangedFiles="true" />
+  </Target>
 
 </Project>

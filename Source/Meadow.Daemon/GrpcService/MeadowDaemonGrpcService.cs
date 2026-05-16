@@ -9,7 +9,7 @@ using Meadow.Daemon.Models;
 
 namespace Meadow.Daemon.GrpcService;
 
-internal sealed class MeadowDaemonGrpcService : MeadowDaemonService.MeadowDaemonServiceBase
+public sealed class MeadowDaemonGrpcService : MeadowDaemonService.MeadowDaemonServiceBase
 {
     private readonly IOptions<DaemonOptions> _options;
     private readonly StateStore _stateStore;
@@ -531,12 +531,26 @@ internal sealed class MeadowDaemonGrpcService : MeadowDaemonService.MeadowDaemon
 
     private static DaemonVersion BuildDaemonVersion()
     {
-        var asm = Assembly.GetExecutingAssembly();
-        return new DaemonVersion
+        try
         {
-            Version = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0",
-            ProtocolVersion = 1,
-            GitCommit = "" // populated in later phases
-        };
+            var asm = Assembly.GetExecutingAssembly();
+            var infoVer = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+            
+            return new DaemonVersion
+            {
+                Version = infoVer ?? asm.GetName().Version?.ToString() ?? "0.0.0",
+                ProtocolVersion = 1,
+                GitCommit = "" // populated in later phases
+            };
+        }
+        catch
+        {
+            return new DaemonVersion
+            {
+                Version = "0.0.0",
+                ProtocolVersion = 1,
+                GitCommit = ""
+            };
+        }
     }
 }

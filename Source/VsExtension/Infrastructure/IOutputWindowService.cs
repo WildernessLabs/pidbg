@@ -1,6 +1,6 @@
 namespace PiDbg.Infrastructure;
 
-public enum OutputPane { PiDbg, Provisioning }
+public enum OutputPane { PiDbg }
 
 public interface IOutputWindowService
 {
