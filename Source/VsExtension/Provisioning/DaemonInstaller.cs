@@ -16,7 +16,7 @@ internal static class DaemonInstaller
 {
     // Populated at VSIX build time by a T4 or source generator stamping the bundled binary.
     // Placeholder values are safe: without RequiredSha256, the SHA check is skipped.
-    public const string RequiredVersion = "1.0.8";
+    public const string RequiredVersion = "1.0.9";
     public const string RequiredSha256 = "";
 
     public static DaemonInstallAction DetermineAction(DetectionResult detection)

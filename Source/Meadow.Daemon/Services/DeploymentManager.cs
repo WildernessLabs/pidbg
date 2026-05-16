@@ -10,12 +10,13 @@ internal class DeploymentManager : IDeploymentManager
     private readonly VersionStore _versionStore;
     private readonly StagingController _staging;
     private readonly ManifestVerifier _verifier;
+    private readonly StateStore _stateStore;
     private readonly DaemonOptions _options;
     private readonly ILogger<DeploymentManager> _logger;
 
     // Per-app lock to ensure serial deployments per application
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _appLocks = new();
-    
+
     // Track in-progress deployments
     private readonly ConcurrentDictionary<string, ActiveDeployment> _activeDeployments = new();
 
@@ -23,12 +24,14 @@ internal class DeploymentManager : IDeploymentManager
         VersionStore versionStore,
         StagingController staging,
         ManifestVerifier verifier,
+        StateStore stateStore,
         IOptions<DaemonOptions> options,
         ILogger<DeploymentManager> logger)
     {
         _versionStore = versionStore;
         _staging = staging;
         _verifier = verifier;
+        _stateStore = stateStore;
         _options = options.Value;
         _logger = logger;
     }
@@ -128,7 +131,7 @@ internal class DeploymentManager : IDeploymentManager
             // Activate
             if (deployment.Slot == DeploymentSlot.Debug)
             {
-                await ActivateDebugSlotAsync(deployment.AppName, deployment.StagingDir, ct);
+                await ActivateDebugSlotAsync(deployment.AppName, deployment.StagingDir, deployment.Manifest, ct);
             }
             else
             {
@@ -162,7 +165,8 @@ internal class DeploymentManager : IDeploymentManager
         await Task.CompletedTask;
     }
 
-    private async Task ActivateDebugSlotAsync(string appName, string stagingDir, CancellationToken ct)
+    private async Task ActivateDebugSlotAsync(
+        string appName, string stagingDir, DeploymentManifest manifest, CancellationToken ct)
     {
         var debugDir = DaemonPaths.AppDebugDir(_options, appName);
         var oldDir   = debugDir + ".old";
@@ -190,8 +194,26 @@ internal class DeploymentManager : IDeploymentManager
             }, ct);
         }
 
+        // Register or update the app record so ProcessManager can start it
+        var appsState = await _stateStore.LoadAppsAsync(ct);
+        var existing  = appsState.Apps.FirstOrDefault(a => a.Name == appName);
+        if (existing is null)
+        {
+            appsState.Apps.Add(new Meadow.Daemon.Models.AppRecord
+            {
+                Name         = appName,
+                EntryPoint   = manifest.EntryPoint,
+                AutoStart    = false,
+                DebugVersion = "debug",
+            });
+        }
+        else
+        {
+            existing.EntryPoint = manifest.EntryPoint;
+        }
+        await _stateStore.SaveAppsAsync(appsState, ct);
+
         _logger.LogInformation("Debug slot activated for {App}", appName);
-        await Task.CompletedTask;
     }
 
     private void ActivateProductionSlot(string appName, string versionId, string stagingDir)
