@@ -11,7 +11,7 @@ var builder = WebApplication.CreateBuilder(args);
 // ── Configuration ─────────────────────────────────────────────────────────────
 
 builder.Configuration
-    .AddJsonFile("appsettings.json", optional: false)
+    .AddJsonFile("appsettings.json", optional: true)
     .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
     .AddJsonFile("/etc/meadow/daemon.conf", optional: true, reloadOnChange: false)
     .AddEnvironmentVariables(prefix: "MEADOW_");

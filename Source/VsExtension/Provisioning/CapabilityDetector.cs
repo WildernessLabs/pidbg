@@ -12,7 +12,8 @@ namespace PiDbg.Provisioning;
 
 internal static class CapabilityDetector
 {
-    private static readonly string DetectScript = LoadEmbeddedScript();
+    private static readonly string DetectScript = LoadEmbeddedScript()
+        .Replace("\r\n", "\n").Replace("\r", "\n");
     private static readonly JsonSerializerOptions JsonOpts =
         new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
 

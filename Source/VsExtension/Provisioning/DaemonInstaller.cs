@@ -53,7 +53,10 @@ internal static class DaemonInstaller
                 "Daemon binary not bundled in this VSIX. " +
                 "Please install the official release of the PiDbg extension.");
 
-        var binDir    = $"{rootFolder}/bin";
+        // Expand ~ to absolute path — systemd and single-quoted SSH args don't expand it.
+        var username = session.Ssh.ConnectionInfo.Username;
+        var absRoot = ExpandTilde(rootFolder, username);
+        var binDir    = $"{absRoot}/bin";
         var daemonBin = $"{binDir}/meadow-daemon";
 
         // Ensure bin directory exists
@@ -86,8 +89,7 @@ internal static class DaemonInstaller
             throw new ProvisioningException($"Failed to install daemon binary: {err}");
 
         progress.Report("Installing systemd service...");
-        var serviceContent = RenderServiceTemplate(rootFolder);
-        var username = session.Ssh.ConnectionInfo.Username;
+        var serviceContent = RenderServiceTemplate(absRoot);
         var serviceDir = $"/home/{username}/.config/systemd/user";
         await session.ExecuteAsync($"mkdir -p '{serviceDir}'", ct).ConfigureAwait(false);
         await UploadTextAsync(session, serviceContent,
@@ -135,7 +137,9 @@ internal static class DaemonInstaller
         return template
             .Replace("@@DAEMON_BIN@@",  $"{rootFolder}/bin/meadow-daemon")
             .Replace("@@INSTALL_DIR@@", rootFolder)
-            .Replace("@@EXTRA_ARGS@@",  "");
+            .Replace("@@EXTRA_ARGS@@",  "")
+            .Replace("\r\n", "\n")
+            .Replace("\r", "\n");
     }
 
     private static Stream? GetEmbeddedBinary()
@@ -172,6 +176,13 @@ internal static class DaemonInstaller
         var bytes = Encoding.UTF8.GetBytes(content);
         using var stream = new MemoryStream(bytes);
         await session.UploadFileAsync(stream, remotePath, null, ct).ConfigureAwait(false);
+    }
+
+    private static string ExpandTilde(string path, string username)
+    {
+        if (path == "~")            return $"/home/{username}";
+        if (path.StartsWith("~/")) return $"/home/{username}/{path.Substring(2)}";
+        return path;
     }
 
     private static bool IsVersionLessThan(string installed, string required)

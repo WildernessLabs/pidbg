@@ -43,6 +43,8 @@ internal sealed class DebugOnPiCommand
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                PiDbgPackage.OutputWindow.WriteLine(OutputPane.PiDbg,
+                    $"LAUNCH FAILED: {ex.Message}");
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
                 VsShellUtilities.ShowMessageBox(
                     pkg,

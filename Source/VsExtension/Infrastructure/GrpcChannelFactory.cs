@@ -3,7 +3,6 @@ using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 using Grpc.Core;
-using Meadow.Daemon.Contracts.V1;
 using Renci.SshNet;
 
 namespace PiDbg.Infrastructure;
@@ -32,11 +31,6 @@ internal sealed class GrpcChannelFactory : IGrpcChannelFactory, IDisposable
             });
 
         _channels[session.Host] = (channel, tunnel);
-
-        // Verify connectivity — surfaces tunnel or daemon issues early
-        var client = new MeadowDaemonService.MeadowDaemonServiceClient(channel);
-        await client.PingAsync(new PingRequest(), cancellationToken: ct);
-
         return channel;
     }
 

@@ -103,10 +103,21 @@ internal static class ProvisioningOrchestrator
 
         // --- Step 5: Health check ---
         output.WriteLine(OutputPane.Provisioning, "[5/7] Waiting for daemon health...");
+        var startupTimeout = action == DaemonInstallAction.None
+            ? TimeSpan.FromSeconds(10)   // already running — should be immediate
+            : TimeSpan.FromSeconds(60);  // fresh install: first-run .NET extraction can be slow
         var healthy = await DaemonInstaller.WaitForHealthAsync(
-            channel, TimeSpan.FromSeconds(30), ct).ConfigureAwait(false);
+            channel, startupTimeout, ct).ConfigureAwait(false);
         if (!healthy)
-            return Fail(steps, "Daemon health", "Daemon did not become healthy within 30 seconds.");
+        {
+            var (_, status, _) = await session.ExecuteAsync(
+                "systemctl --user status meadow-daemon --no-pager -l 2>&1 | tail -30",
+                ct).ConfigureAwait(false);
+            output.WriteLine(OutputPane.Provisioning,
+                $"Daemon status:\n{status}");
+            return Fail(steps, "Daemon health",
+                $"Daemon did not become healthy within 10 seconds.\n{status}");
+        }
         steps.Add(MakeStep("Daemon health", true, "OK"));
 
         // --- Step 6: Version negotiation ---

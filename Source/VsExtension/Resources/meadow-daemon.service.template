@@ -5,7 +5,12 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=@@DAEMON_BIN@@ --install-dir @@INSTALL_DIR@@ @@EXTRA_ARGS@@
+ExecStart=@@DAEMON_BIN@@
+Environment=MEADOW_DAEMON__INSTALLROOT=@@INSTALL_DIR@@
+Environment=MEADOW_DAEMON__APPROOT=@@INSTALL_DIR@@/apps
+Environment=MEADOW_DAEMON__VSDBGROOT=@@INSTALL_DIR@@/vsdbg
+Environment=MEADOW_DAEMON__STATEROOT=@@INSTALL_DIR@@/state
+Environment=MEADOW_DAEMON__LOGROOT=@@INSTALL_DIR@@/logs
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal

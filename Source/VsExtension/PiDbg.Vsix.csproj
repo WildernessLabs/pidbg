@@ -18,6 +18,10 @@
     <!-- VS SDK warnings in generated code; relax for this project only -->
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    
+    <OutputPath>C:\Users\ctack\AppData\Local\Microsoft\VisualStudio\18.0_d9c23f5eExp\Extensions\a2bpzhdr.vm0</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -63,12 +67,9 @@
     <EmbeddedResource Include="Resources\version-manifest.json" />
     <EmbeddedResource Include="Resources\meadow-daemon.service.template" />
     <!-- Conditional: daemon binary and vsdbg tarball are not bundled in dev builds -->
-    <EmbeddedResource Condition="Exists('Resources\meadow-daemon')"
-                      Include="Resources\meadow-daemon" />
-    <EmbeddedResource Condition="Exists('Resources\vsdbg-linux-arm64.tar.gz')"
-                      Include="Resources\vsdbg-linux-arm64.tar.gz" />
-    <EmbeddedResource Condition="Exists('Resources\vsdbg-linux-arm64.tar.gz.sha256')"
-                      Include="Resources\vsdbg-linux-arm64.tar.gz.sha256" />
+    <EmbeddedResource Condition="Exists('Resources\meadow-daemon')" Include="Resources\meadow-daemon" />
+    <EmbeddedResource Condition="Exists('Resources\vsdbg-linux-arm64.tar.gz')" Include="Resources\vsdbg-linux-arm64.tar.gz" />
+    <EmbeddedResource Condition="Exists('Resources\vsdbg-linux-arm64.tar.gz.sha256')" Include="Resources\vsdbg-linux-arm64.tar.gz.sha256" />
   </ItemGroup>
 
 </Project>
