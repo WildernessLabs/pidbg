@@ -39,6 +39,7 @@ public sealed class PiDbgPackage : AsyncPackage
             GrpcChannels = new GrpcChannelFactory();
             Tunnels = new DebugTunnelManager();
 
+            await DebugOnPiCommand.InitializeAsync(this);
             await ConnectCommand.InitializeAsync(this);
             await DisconnectCommand.InitializeAsync(this);
             await ShowLogsCommand.InitializeAsync(this);
@@ -74,6 +75,7 @@ internal static class PackageGuids
 
 internal static class CommandIds
 {
+    public const int DebugOnPi = 0x0104;
     public const int Connect = 0x0100;
     public const int Disconnect = 0x0101;
     public const int ShowLogs = 0x0102;

@@ -5,6 +5,8 @@ using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 
+using PiDbg.Infrastructure;
+
 namespace PiDbg.ProjectSystem;
 
 internal sealed class PiDbgCapabilityEnsurer
@@ -15,15 +17,25 @@ internal sealed class PiDbgCapabilityEnsurer
 
     public async Task<string?> GetProjectPathAsync(CancellationToken ct)
     {
-        var solution = await _package.GetServiceAsync(typeof(SVsSolution)).ConfigureAwait(false) as IVsSolution;
-        if (solution is null) return null;
+        var hier = await GetStartupHierarchyAsync(ct).ConfigureAwait(false);
+        if (hier is null)
+        {
+            PiDbgPackage.OutputWindow.WriteLine(OutputPane.PiDbg,
+                "PiDbg: Could not determine startup project. " +
+                "Make sure a project is set as the startup project in Solution Explorer.");
+            return null;
+        }
 
         await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(ct);
-
-        var hier = GetStartupHierarchy(solution);
-        if (hier is null) return null;
-
         hier.GetCanonicalName((uint)VSConstants.VSITEMID.Root, out var path);
+
+        if (string.IsNullOrEmpty(path))
+        {
+            PiDbgPackage.OutputWindow.WriteLine(OutputPane.PiDbg,
+                "PiDbg: Could not read the startup project path.");
+            return null;
+        }
+
         return path;
     }
 
@@ -45,33 +57,42 @@ internal sealed class PiDbgCapabilityEnsurer
                 new XAttribute("Include", "PiDbg"))));
 
         doc.Save(projectPath);
+        PiDbgPackage.OutputWindow.WriteLine(OutputPane.PiDbg,
+            "PiDbg: Added PiDbg capability to project. Reloading...");
 
         // Reload so VS picks up the new capability and activates PiDbgDebugLaunchProvider.
         var solution = await _package.GetServiceAsync(typeof(SVsSolution)).ConfigureAwait(false) as IVsSolution;
         var solution4 = solution as IVsSolution4;
-        if (solution4 is null) return;
+        if (solution4 is null)
+        {
+            PiDbgPackage.OutputWindow.WriteLine(OutputPane.PiDbg,
+                "PiDbg: Could not reload project (IVsSolution4 unavailable). Reload the project manually.");
+            return;
+        }
 
         await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(ct);
 
-        var hier = GetStartupHierarchy(solution);
+        var hier = await GetStartupHierarchyAsync(ct).ConfigureAwait(false);
         if (hier is null) return;
 
         ErrorHandler.ThrowOnFailure(solution.GetGuidOfProject(hier, out var projectGuid));
         solution4.ReloadProject(ref projectGuid);
     }
 
-    private static IVsHierarchy? GetStartupHierarchy(IVsSolution solution)
+    private async Task<IVsHierarchy?> GetStartupHierarchyAsync(CancellationToken ct)
     {
-        ThreadHelper.ThrowIfNotOnUIThread();
+        var bm = await _package.GetServiceAsync(typeof(SVsSolutionBuildManager))
+            .ConfigureAwait(false) as IVsSolutionBuildManager2;
 
-        var guid = Guid.Empty;
-        ErrorHandler.ThrowOnFailure(
-            solution.GetProjectEnum((uint)__VSENUMPROJFLAGS.EPF_LOADEDINSOLUTION, ref guid, out var enumerator));
+        if (bm is null)
+        {
+            PiDbgPackage.OutputWindow.WriteLine(OutputPane.PiDbg,
+                "PiDbg: IVsSolutionBuildManager2 unavailable.");
+            return null;
+        }
 
-        if (enumerator is null) return null;
-
-        var items = new IVsHierarchy[1];
-        enumerator.Next(1, items, out var fetched);
-        return fetched > 0 ? items[0] : null;
+        await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(ct);
+        bm.get_StartupProject(out var hier);
+        return hier;
     }
 }

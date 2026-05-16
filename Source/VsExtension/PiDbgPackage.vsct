@@ -28,6 +28,12 @@
     </Menus>
 
     <Buttons>
+      <Button guid="guidPiDbgCmdSet" id="cmdDebugOnPi" priority="0x0050" type="Button">
+        <Parent guid="guidPiDbgCmdSet" id="grpPiDbgCommands"/>
+        <Strings>
+          <ButtonText>Debug on Pi</ButtonText>
+        </Strings>
+      </Button>
       <Button guid="guidPiDbgCmdSet" id="cmdConnect" priority="0x0100" type="Button">
         <Parent guid="guidPiDbgCmdSet" id="grpPiDbgCommands"/>
         <Strings>
@@ -62,6 +68,7 @@
       <IDSymbol name="grpPiDbgInTools"      value="0x1000" />
       <IDSymbol name="grpPiDbgCommands"     value="0x1001" />
       <IDSymbol name="mnuPiDbg"             value="0x1100" />
+      <IDSymbol name="cmdDebugOnPi"         value="0x0104" />
       <IDSymbol name="cmdConnect"           value="0x0100" />
       <IDSymbol name="cmdDisconnect"        value="0x0101" />
       <IDSymbol name="cmdShowLogs"          value="0x0102" />

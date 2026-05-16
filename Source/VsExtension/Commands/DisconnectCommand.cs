@@ -30,5 +30,8 @@ internal sealed class DisconnectCommand
     }
 
     private static void Execute(object sender, EventArgs e)
-        => throw new NotImplementedException("Implemented in Phase 7");
+    {
+        PiDbgPackage.OutputWindow.WriteLine(OutputPane.PiDbg,
+            "Disconnect is not yet implemented. To stop Pi debugging, remove the PiDbg profile from launchSettings.json.");
+    }
 }

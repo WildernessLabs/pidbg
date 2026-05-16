@@ -33,9 +33,8 @@ internal static class PiDbgLaunchProfileWriter
         foreach (var kv in profiles)
         {
             var node = kv.Value;
-            if (node?["commandName"]?.GetValue<string>() != PiDbgLaunchProfile.CommandName) continue;
-
-            var host = node["PiDbgHost"]?.GetValue<string>() ?? "";
+            // Pi profiles are identified by the presence of PiDbgHost, not commandName.
+            var host = node?["PiDbgHost"]?.GetValue<string>() ?? "";
             if (string.IsNullOrEmpty(host)) continue;
 
             return (
@@ -75,19 +74,21 @@ internal static class PiDbgLaunchProfileWriter
             root["profiles"] = profiles;
         }
 
-        // Remove any pre-existing PiDbg profiles before writing the new one.
+        // Remove any pre-existing PiDbg profiles (identified by PiDbgHost) before writing the new one.
         var toRemove = new List<string>();
         foreach (var kv in profiles)
         {
-            if (profiles[kv.Key]?["commandName"]?.GetValue<string>() == PiDbgLaunchProfile.CommandName)
+            if (!string.IsNullOrEmpty(profiles[kv.Key]?["PiDbgHost"]?.GetValue<string>()))
                 toRemove.Add(kv.Key);
         }
         foreach (var key in toRemove)
             profiles.Remove(key);
 
+        // Use "Project" so VS recognizes the commandName and doesn't show an error.
+        // PiDbgHost (and siblings) identify this as a Pi profile to our launch provider.
         profiles[PiDbgLaunchProfile.BuildProfileName(config.Host)] = new JsonObject
         {
-            ["commandName"]         = PiDbgLaunchProfile.CommandName,
+            ["commandName"]         = "Project",
             ["PiDbgHost"]           = config.Host,
             ["PiDbgPort"]           = config.Port,
             ["PiDbgUsername"]       = config.User,
