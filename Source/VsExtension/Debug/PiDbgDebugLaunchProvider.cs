@@ -14,12 +14,13 @@ using PiDbg.Provisioning;
 namespace PiDbg.Debug;
 
 [Export(typeof(IDebugLaunchProvider))]
-[AppliesTo(PiDbgLaunchProfile.CommandName)]
+[AppliesTo(ProjectCapabilities.CSharp + " & " + PiDbgLaunchProfile.CommandName)]
+[Order(int.MinValue)]
 internal sealed class PiDbgDebugLaunchProvider : IDebugLaunchProvider
 {
-    // VS debug engine GUID for the managed (.NET) debugger — must not change.
-    private static readonly Guid ManagedDebugEngineGuid =
-        new("2E36F1D4-B23C-435D-AB41-18E608940038");
+    // MIEngine GUID — handles vsdbg via DAP when DebuggerMIMode="vsdbg".
+    private static readonly Guid MiEngineGuid =
+        new("EA6637C6-17DF-45B5-A183-0951C54243BC");
 
     private readonly ConfiguredProject _project;
 
@@ -80,7 +81,7 @@ internal sealed class PiDbgDebugLaunchProvider : IDebugLaunchProvider
         if (!provision.Success)
             throw new InvalidOperationException(
                 $"Provisioning failed: {provision.Error}\n" +
-                "See the 'PiDbg Provisioning' output pane for details.");
+                "See the 'PiDbg' output pane for details.");
 
         var channel = provision.Channel!;
 
@@ -129,14 +130,32 @@ internal sealed class PiDbgDebugLaunchProvider : IDebugLaunchProvider
             $"Tunnel: localhost:{localPort} → {config.Host}:{sessionResp.VsdbgPort}");
         output.WriteLine(OutputPane.PiDbg, "Attaching VS debugger...");
 
-        // --- Step 7: Build VS debug target (attach to already-running vsdbg) ---
+        // --- Step 7: Build VS debug target using MIEngine + TcpLaunchOptions ---
+        // MIEngine with DebuggerMIMode="vsdbg" speaks DAP with vsdbg.
+        // The daemon's TCP proxy pipes the tunnel connection to vsdbg's stdin/stdout.
+        var absRoot    = session.ExpandPath(config.RootFolder);
+        var appDllPath = $"{absRoot}/apps/{appName}/debug/{appName}.dll";
+
+        var tcpOptions = $"""
+            <TcpLaunchOptions xmlns="http://schemas.microsoft.com/vstudio/MDDDebuggerOptions/2014"
+                Hostname="127.0.0.1"
+                Port="{localPort}"
+                ExePath="{appDllPath}"
+                TargetArchitecture="arm64"
+                AdditionalSOLibSearchPath=""
+                DebuggerMIMode="vsdbg">
+                <AttachInfo>
+                    <AttachInfoItem Name="ProcessId" Value="{sessionResp.AppPid}"/>
+                </AttachInfo>
+            </TcpLaunchOptions>
+            """;
+
         var settings = new DebugLaunchSettings(launchOptions)
         {
-            Executable = $"{appName}.dll",
-            LaunchDebugEngineGuid = ManagedDebugEngineGuid,
-            LaunchOperation = DebugLaunchOperation.AlreadyRunning,
-            RemoteMachine = $"127.0.0.1:{localPort}",
-            Options = BuildDebugOptions(sessionResp, localPort),
+            LaunchDebugEngineGuid = MiEngineGuid,
+            LaunchOperation       = DebugLaunchOperation.CreateProcess,
+            Options               = tcpOptions,
+            Executable            = appDllPath,
         };
 
         return new IDebugLaunchSettings[] { settings };
@@ -146,13 +165,4 @@ internal sealed class PiDbgDebugLaunchProvider : IDebugLaunchProvider
     {
         await QueryDebugTargetsAsync(launchOptions).ConfigureAwait(false);
     }
-
-    private static string BuildDebugOptions(StartDebugSessionResponse session, int localPort)
-        => System.Text.Json.JsonSerializer.Serialize(new
-        {
-            transport = "tcp",
-            port = localPort,
-            host = "127.0.0.1",
-            sessionId = session.SessionId,
-        });
 }

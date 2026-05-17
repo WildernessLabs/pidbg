@@ -50,12 +50,7 @@ internal class VsdbgLauncher
             RedirectStandardError  = true,
         };
         info.ArgumentList.Add("--interpreter=vscode");
-        // --attach N makes vsdbg auto-attach once VS sends the DAP attach request.
-        if (attachPid.HasValue)
-        {
-            info.ArgumentList.Add("--attach");
-            info.ArgumentList.Add(attachPid.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        }
+        // MIEngine sends the DAP attach request with the process ID after connecting.
 
         var stderrBuf = new StringBuilder();
         var process   = new Process { StartInfo = info, EnableRaisingEvents = true };

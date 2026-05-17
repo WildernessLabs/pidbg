@@ -86,8 +86,6 @@ internal static class PiDbgLaunchProfileWriter
         foreach (var key in toRemove)
             profiles.Remove(key);
 
-        // Use "Project" so VS recognizes the commandName and doesn't show an error.
-        // PiDbgHost (and siblings) identify this as a Pi profile to our launch provider.
         profiles[PiDbgLaunchProfile.BuildProfileName(config.Host)] = new JsonObject
         {
             ["commandName"]         = "Project",
