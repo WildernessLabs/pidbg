@@ -103,7 +103,116 @@ The `.proto` package is `pidbg.v1`.
 
 ---
 
-### 4. PiDbg.Transport
+### 4. PiDbg.Core
+
+| Property | Value |
+|----------|-------|
+| Type | Class library |
+| SDK | Microsoft.NET.Sdk |
+| Target | net10.0; net472 |
+| Output | PiDbg.Core.dll |
+
+**Purpose:** Shared orchestration library. Exposes `SessionOrchestrator`, which drives the
+full connect → provision → publish → deploy → start-session → open-tunnel sequence and
+returns a `DebugSessionInfo`. Both `PiDbg.Vsix` and `PiDbg.DebugAdapter` depend on this;
+neither contains orchestration logic of its own.
+
+**Key types:**
+- `SessionOrchestrator` — primary entry point; accepts `SessionRequest`, returns `DebugSessionInfo`
+- `DebugSessionInfo` — immutable record: `{ LocalPort, AppPid, AppDllPath, TunnelHandle }`
+- `SessionRequest` — connection params + publish params + app name
+- `IPublishRunner` — abstraction over `dotnet publish`; two implementations:
+  - `MsBuildPublishRunner` (used by VSIX — invokes VS build manager)
+  - `CliPublishRunner` (used by DebugAdapter — invokes `dotnet publish` CLI)
+
+**Key NuGet dependencies:**
+- `Microsoft.Extensions.Logging.Abstractions`
+- `PiDbg.Contracts` (project reference)
+- `PiDbg.Transport` (project reference)
+- `PiDbg.Deployment` (project reference)
+- `PiDbg.DeviceManagement` (project reference)
+
+**Constraint:** No VS SDK references. No TypeScript. Must be callable from both net472 and net10.0.
+
+---
+
+### 4b. PiDbg.DebugAdapter
+
+| Property | Value |
+|----------|-------|
+| Type | Console application |
+| SDK | Microsoft.NET.Sdk |
+| Target | net10.0 |
+| Runtime | win-x64 (shipped as self-contained alongside VS Code extension) |
+| Output | pidbg-adapter.exe |
+
+**Purpose:** Standalone DAP server for VS Code. VS Code launches this executable and
+communicates with it via DAP on stdin/stdout. The adapter drives the full debug session
+setup via `PiDbg.Core`, then proxies DAP messages between VS Code and vsdbg over the SSH
+tunnel.
+
+**DAP message handling:**
+- `initialize` — respond with adapter capabilities
+- `launch` — call `SessionOrchestrator.RunAsync()`; send `initialized` + `process` events
+- `configurationDone` — open TCP connection to vsdbg on the SSH tunnel port; start proxying
+- `disconnect` / `terminate` — call `SessionOrchestrator.StopAsync()`; tear down tunnel
+
+**Key NuGet dependencies:**
+- `Microsoft.VisualStudio.Shared.VsCodeDebugProtocol` or `Microsoft.Extensions.Logging.Abstractions`
+- `PiDbg.Core` (project reference)
+
+**Constraints:**
+- No VS SDK references
+- No UI or interactive stdin (VS Code owns the UX)
+- Must start in < 500 ms (VS Code waits synchronously for `initialize` response)
+
+---
+
+### 4c. PiDbg.VsCodeExtension
+
+| Property | Value |
+|----------|-------|
+| Type | VS Code extension (TypeScript) |
+| Language | TypeScript 5.x |
+| Engine | VS Code ^1.90.0 |
+| Output | pidbg-vscode-x.y.z.vsix |
+| Location | `src/PiDbg.VsCodeExtension/` |
+
+**Purpose:** Thin TypeScript shell. Registers the `pidbg` debug type and returns a
+`DebugAdapterExecutable` descriptor pointing at the bundled `pidbg-adapter.exe`. Contains
+no orchestration logic.
+
+**VS Code contribution points:**
+- `debuggers` — type `pidbg`, label "Raspberry Pi (.NET)"
+- `breakpoints` — applies to `csharp` language
+- `commands` — "PiDbg: Connect to Device", "PiDbg: Show Output"
+- `configuration` — launch.json schema (host, port, username, privateKeyPath, appName, rootFolder)
+- `statusBarItem` — connection state indicator
+
+**launch.json schema example:**
+```json
+{
+  "type": "pidbg",
+  "request": "launch",
+  "name": "Debug on Pi",
+  "host": "raspberrypi.local",
+  "username": "pi",
+  "privateKeyPath": "${userHome}/.ssh/pidbg_rsa",
+  "appName": "${workspaceFolderBasename}",
+  "rootFolder": "~/meadow"
+}
+```
+
+**Key npm dependencies:**
+- `@vscode/debugadapter` (DAP type definitions)
+- `@vscode/debugprotocol`
+
+**Constraint:** Does not bundle `ssh2` or any SSH library — all SSH/gRPC is handled by
+`pidbg-adapter.exe`. The TypeScript code is intentionally minimal.
+
+---
+
+### 6. PiDbg.Transport
 
 | Property | Value |
 |----------|-------|
@@ -126,7 +235,7 @@ port forwarding manager, SFTP transfer service, and device probing (validate OS,
 
 ---
 
-### 5. PiDbg.Deployment
+### 7. PiDbg.Deployment
 
 | Property | Value |
 |----------|-------|
@@ -145,7 +254,7 @@ manifest, transfers it via SFTP, and instructs the agent to commit the deploymen
 
 ---
 
-### 6. PiDbg.DeviceManagement
+### 8. PiDbg.DeviceManagement
 
 | Property | Value |
 |----------|-------|
@@ -166,7 +275,7 @@ device discovery (initially manual-add + mDNS in Phase 2), connection factory
 
 ---
 
-### 7. PiDbg.Shared
+### 9. PiDbg.Shared
 
 | Property | Value |
 |----------|-------|
@@ -186,7 +295,7 @@ Referenced by all other projects. Never references any other PiDbg project.
 
 ---
 
-### 8. PiDbg.Integration.Tests
+### 10. PiDbg.Integration.Tests
 
 | Property | Value |
 |----------|-------|
@@ -206,7 +315,7 @@ Configured via environment variables: `PIDBG_TEST_HOST`, `PIDBG_TEST_USER`,
 
 ---
 
-### 9. PiDbg.Transport.Tests
+### 11. PiDbg.Transport.Tests
 
 | Property | Value |
 |----------|-------|
@@ -218,7 +327,7 @@ Uses a mock SSH server (embedded Sshd or mock) to avoid real Pi dependency.
 
 ---
 
-### 10. PiDbg.Deployment.Tests
+### 12. PiDbg.Deployment.Tests
 
 | Property | Value |
 |----------|-------|
@@ -230,7 +339,7 @@ All tests run against local filesystem — no SSH required.
 
 ---
 
-### 11. PiDbg.Agent.Tests
+### 13. PiDbg.Agent.Tests
 
 | Property | Value |
 |----------|-------|
@@ -245,16 +354,69 @@ All Linux-specific calls (process.Start, Directory.Move) are behind interfaces a
 
 ## Build Matrix Summary
 
-| Project | net472 | net10.0 | linux-arm64 | Self-contained |
-|---------|--------|---------|-------------|----------------|
-| PiDbg.Vsix | ✓ | | | |
-| PiDbg.Agent | | ✓ | ✓ | ✓ |
-| PiDbg.Contracts | ✓ | ✓ | | |
-| PiDbg.Transport | ✓ | ✓ | | |
-| PiDbg.Deployment | ✓ | ✓ | | |
-| PiDbg.DeviceManagement | ✓ | ✓ | | |
-| PiDbg.Shared | ✓ | ✓ | | |
-| *Tests | | ✓ | | |
+| Project | net472 | net10.0 | win-x64 | linux-arm64 | Self-contained | TypeScript |
+|---------|--------|---------|---------|-------------|----------------|------------|
+| PiDbg.Vsix | ✓ | | | | | |
+| PiDbg.Agent | | ✓ | | ✓ | ✓ | |
+| PiDbg.Contracts | ✓ | ✓ | | | | |
+| PiDbg.Core | ✓ | ✓ | | | | |
+| PiDbg.DebugAdapter | | ✓ | ✓ | | ✓ | |
+| PiDbg.VsCodeExtension | | | | | | ✓ |
+| PiDbg.Transport | ✓ | ✓ | | | | |
+| PiDbg.Deployment | ✓ | ✓ | | | | |
+| PiDbg.DeviceManagement | ✓ | ✓ | | | | |
+| PiDbg.Shared | ✓ | ✓ | | | | |
+| *Tests | | ✓ | | | | |
 
-The VSIX targets net472 because Visual Studio 2026 still hosts extensions in a net472
-AppDomain. All library dependencies must multi-target to ensure compatibility.
+Notes:
+- VSIX targets net472 because Visual Studio 2026 hosts extensions in a net472 AppDomain. All library dependencies multi-target for compatibility.
+- `PiDbg.DebugAdapter` is published as a win-x64 self-contained executable and bundled inside the VS Code extension's `bin/` folder.
+- `PiDbg.VsCodeExtension` is built with `npm run compile` + `vsce package`; the adapter exe is copied into place before packaging.
+
+## Project Dependency Graph
+
+```
+PiDbg.Vsix
+  → PiDbg.Core
+  → PiDbg.Contracts
+  → PiDbg.DeviceManagement
+  → PiDbg.Shared
+
+PiDbg.DebugAdapter
+  → PiDbg.Core
+  → PiDbg.Shared
+
+PiDbg.VsCodeExtension
+  → (no .NET refs — launches PiDbg.DebugAdapter as a subprocess)
+
+PiDbg.Core
+  → PiDbg.Transport
+  → PiDbg.Deployment
+  → PiDbg.Contracts
+  → PiDbg.DeviceManagement
+  → PiDbg.Shared
+
+PiDbg.Agent
+  → PiDbg.Contracts
+  → PiDbg.Shared
+
+PiDbg.Deployment
+  → PiDbg.Transport
+  → PiDbg.Contracts
+  → PiDbg.Shared
+
+PiDbg.DeviceManagement
+  → PiDbg.Transport
+  → PiDbg.Shared
+
+PiDbg.Transport
+  → PiDbg.Shared
+
+PiDbg.Contracts
+  → (no internal dependencies)
+
+PiDbg.Shared
+  → (no internal dependencies)
+```
+
+The dependency graph remains a DAG — no cycles introduced by the new projects.

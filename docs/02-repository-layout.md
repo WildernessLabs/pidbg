@@ -5,7 +5,7 @@
 ```
 pidbg/
 │
-├── pidbg.slnx                          # Solution file
+├── pidbg.slnx                          # Solution file (C# projects only)
 │
 ├── src/
 │   │
@@ -18,10 +18,10 @@ pidbg/
 │   │   │   ├── ManageDevicesCommand.cs
 │   │   │   └── ShowOutputCommand.cs
 │   │   ├── Debug/
-│   │   │   ├── RaspberryPiDebugLaunchProvider.cs
+│   │   │   ├── RaspberryPiDebugLaunchProvider.cs   # Calls SessionOrchestrator, hands off to MIEngine
 │   │   │   ├── RaspberryPiDebugProfileProvider.cs
 │   │   │   ├── RaspberryPiLaunchProfile.cs
-│   │   │   └── DebugSessionOrchestrator.cs
+│   │   │   └── MsBuildPublishRunner.cs             # IPublishRunner via VS IBuildManager
 │   │   ├── UI/
 │   │   │   ├── DeviceManagerWindow.cs         # ToolWindowPane
 │   │   │   ├── DeviceManagerWindowControl.xaml
@@ -38,6 +38,34 @@ pidbg/
 │   │   └── Resources/
 │   │       ├── VSPackage.resx
 │   │       └── raspberrypi.png
+│   │
+│   ├── PiDbg.Core/                    # Shared orchestration library
+│   │   ├── PiDbg.Core.csproj
+│   │   ├── SessionOrchestrator.cs     # Drives steps 1–6; returns DebugSessionInfo
+│   │   ├── Models/
+│   │   │   ├── SessionRequest.cs      # Input: connection + publish params
+│   │   │   └── DebugSessionInfo.cs    # Output: LocalPort, Pid, DllPath, TunnelHandle
+│   │   └── Publish/
+│   │       ├── IPublishRunner.cs
+│   │       └── CliPublishRunner.cs    # dotnet publish CLI impl (used by DebugAdapter)
+│   │
+│   ├── PiDbg.DebugAdapter/            # DAP server for VS Code
+│   │   ├── PiDbg.DebugAdapter.csproj
+│   │   ├── Program.cs                 # Entry point — attach DAP on stdio
+│   │   ├── PiDbgDebugAdapter.cs       # Handles initialize/launch/configurationDone/disconnect
+│   │   └── DapProxy.cs                # Proxies DAP messages: stdio ↔ vsdbg TCP
+│   │
+│   ├── PiDbg.VsCodeExtension/         # VS Code extension (TypeScript)
+│   │   ├── package.json               # Extension manifest + contributes.debuggers
+│   │   ├── tsconfig.json
+│   │   ├── src/
+│   │   │   ├── extension.ts           # activate() — registers factory
+│   │   │   ├── debugAdapterFactory.ts # Returns DebugAdapterExecutable("pidbg-adapter.exe")
+│   │   │   ├── devicePicker.ts        # "PiDbg: Connect to Device" command
+│   │   │   └── statusBar.ts           # Connection state indicator
+│   │   ├── schemas/
+│   │   │   └── pidbg-launch.schema.json  # launch.json schema
+│   │   └── bin/                       # pidbg-adapter.exe copied here at build time
 │   │
 │   ├── PiDbg.Agent/                   # Pi-side daemon
 │   │   ├── PiDbg.Agent.csproj
@@ -189,11 +217,24 @@ pidbg/
 
 ```
 PiDbg.Vsix
+  → PiDbg.Core             (SessionOrchestrator — orchestration steps 1–6)
   → PiDbg.Contracts        (proto types, gRPC client stubs)
-  → PiDbg.Transport        (SSH.NET, SFTP)
-  → PiDbg.Deployment       (packager, transfer)
   → PiDbg.DeviceManagement (registry, discovery)
   → PiDbg.Shared           (constants)
+
+PiDbg.DebugAdapter
+  → PiDbg.Core             (SessionOrchestrator)
+  → PiDbg.Shared
+
+PiDbg.VsCodeExtension
+  → (no .NET references — launches pidbg-adapter.exe as subprocess)
+
+PiDbg.Core
+  → PiDbg.Transport        (SSH.NET, SFTP)
+  → PiDbg.Deployment       (packager, transfer)
+  → PiDbg.Contracts        (gRPC client stubs)
+  → PiDbg.DeviceManagement (registry, discovery)
+  → PiDbg.Shared
 
 PiDbg.Agent
   → PiDbg.Contracts        (proto types, gRPC server stubs)
@@ -218,7 +259,7 @@ PiDbg.Shared
   → (no internal dependencies)
 ```
 
-The dependency graph is a DAG — there are no cycles.
+The dependency graph is a DAG — no cycles.
 
 ---
 

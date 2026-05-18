@@ -186,17 +186,62 @@
 
 ---
 
-## Phase 8: Ecosystem Extensions (Backlog)
+## Phase 8: PiDbg.Core Extraction + VS Code Support
+**Duration:** 3–4 weeks
+**Goal:** Extract shared orchestration into `PiDbg.Core`; ship a working VS Code extension
+
+### Context
+Steps 1–6 of the debug session flow (SSH → provision → publish → deploy → start session →
+open tunnel) currently live inside `PiDbg.Vsix`. Extracting them into `PiDbg.Core` makes
+them reusable. `PiDbg.DebugAdapter` consumes `PiDbg.Core` and implements a DAP server that
+VS Code launches as a subprocess. The VS Code extension itself is a thin TypeScript shell.
+
+### Deliverables
+
+**PiDbg.Core (new library):**
+- [ ] `SessionOrchestrator` — async, cancellable; accepts `SessionRequest`, returns `DebugSessionInfo`
+- [ ] `IPublishRunner` + `CliPublishRunner` (wraps `dotnet publish` CLI)
+- [ ] `MsBuildPublishRunner` (wraps VS `IBuildManager`) — moved from VSIX
+- [ ] Refactor VSIX: `RaspberryPiDebugLaunchProvider` delegates to `SessionOrchestrator`
+- [ ] Confirm VSIX behavior unchanged end-to-end after refactor
+
+**PiDbg.DebugAdapter (new executable):**
+- [ ] DAP server on stdin/stdout (`initialize`, `launch`, `configurationDone`, `disconnect`)
+- [ ] `launch` handler calls `SessionOrchestrator.RunAsync()`
+- [ ] `DapProxy` — TCP↔stdio bridge to vsdbg after session is established
+- [ ] Structured logging to stderr (VS Code surfaces it in the debug console)
+- [ ] win-x64 self-contained publish; bundled into VS Code extension `bin/`
+
+**PiDbg.VsCodeExtension (new TypeScript project):**
+- [ ] `package.json` — `debuggers` contribution, `pidbg` type, launch.json schema
+- [ ] `debugAdapterFactory.ts` — returns `DebugAdapterExecutable` for `pidbg-adapter.exe`
+- [ ] `devicePicker.ts` — "PiDbg: Connect to Device" command (reads `devices.json`)
+- [ ] `statusBar.ts` — connection indicator
+- [ ] `schemas/pidbg-launch.schema.json` — full IntelliSense for launch.json
+- [ ] `scripts/build.ps1` — compiles adapter, copies exe, runs `vsce package`
+- [ ] Integration test: VS Code F5 → breakpoint hit on real Pi
+
+### Exit criteria
+- VSIX behavior is unchanged after Core extraction (regression tests pass)
+- VS Code F5 on a C# .NET 10 project with `"type": "pidbg"` profile:
+  - Builds, deploys, attaches
+  - Breakpoints hit, stepping works
+- `pidbg-adapter.exe` starts in < 500 ms
+- VS Code extension packages cleanly with `vsce package`
+
+---
+
+## Phase 9: Ecosystem Extensions (Backlog)
 Not scheduled — collected for future planning:
 
 - Hot Reload support (requires `MetadataUpdateHandlerAttribute` + vsdbg protocol extensions)
 - Profiling integration (requires separate profiler attach, not vsdbg)
-- VS Code extension (separate project — different debug adapter)
 - ARM32 (Raspberry Pi OS 32-bit) support
 - Alpine Linux support
-- Automatic Pi provisioning wizard in VSIX (SSH in, run install-agent.sh automatically)
+- Automatic Pi provisioning wizard (SSH in, run install-agent.sh automatically)
 - Remote file system browser in Device Manager
 - Environment variable management per-device in UI
+- Other DAP-capable editors (Neovim, Helix) via `pidbg-adapter.exe` — architecture already supports it
 
 ---
 
@@ -212,16 +257,18 @@ Not scheduled — collected for future planning:
 | Phase 5: Self-Update | 1–2 weeks | 18 weeks |
 | Phase 6: Discovery | 2–3 weeks | 21 weeks |
 | Phase 7: Hardening | 2–3 weeks | 24 weeks |
+| Phase 8: Core + VS Code | 3–4 weeks | 28 weeks |
 
 **Phase 1 completion = first usable deploy without debugging (~6 weeks)**  
 **Phase 2 completion = first working remote debug session (~10 weeks)**  
-**Phase 4 completion = beta-quality product (~16 weeks)**
+**Phase 4 completion = beta-quality VS product (~16 weeks)**  
+**Phase 8 completion = VS Code parity (~28 weeks)**
 
 ---
 
 ## Critical Path
 
-The critical dependency chain is linear through Phase 2:
+The critical dependency chain is linear through Phase 2, then branches:
 
 ```
 SSH.NET transport
@@ -231,8 +278,14 @@ SSH.NET transport
         → VsdbgManager + VsdbgLauncher
           → SSH port forward for vsdbg
             → VS debugger attach API
-              → ✓ Working debug session
+              → ✓ Working VS debug session (Phase 2)
+                → PiDbg.Core extraction (Phase 8)
+                  → PiDbg.DebugAdapter
+                    → PiDbg.VsCodeExtension
+                      → ✓ Working VS Code debug session (Phase 8)
 ```
 
-No phase has work that can be parallelized with Phase 2 work to compress the schedule.
-Phases 3–5 can be done in parallel by separate team members once Phase 2 is complete.
+Phases 3–7 can be done in parallel by separate team members once Phase 2 is complete.
+Phase 8 depends only on Phase 2 being complete — it can begin alongside Phases 3–5 if
+staffing allows. The `PiDbg.Core` extraction is a refactor with no behavior change;
+do it first, verify with the VSIX, then build the adapter and extension on top.

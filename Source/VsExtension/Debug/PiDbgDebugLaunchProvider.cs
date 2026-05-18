@@ -14,7 +14,7 @@ using PiDbg.Provisioning;
 namespace PiDbg.Debug;
 
 [Export(typeof(IDebugLaunchProvider))]
-[AppliesTo(ProjectCapabilities.CSharp + " & " + PiDbgLaunchProfile.CommandName)]
+[AppliesTo(ProjectCapabilities.CSharp)]
 [Order(int.MinValue)]
 internal sealed class PiDbgDebugLaunchProvider : IDebugLaunchProvider
 {

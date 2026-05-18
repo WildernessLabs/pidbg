@@ -88,7 +88,7 @@ internal static class PiDbgLaunchProfileWriter
 
         profiles[PiDbgLaunchProfile.BuildProfileName(config.Host)] = new JsonObject
         {
-            ["commandName"]         = "Project",
+            ["commandName"]         = PiDbgLaunchProfile.CommandName,
             ["PiDbgHost"]           = config.Host,
             ["PiDbgPort"]           = config.Port,
             ["PiDbgUsername"]       = config.User,

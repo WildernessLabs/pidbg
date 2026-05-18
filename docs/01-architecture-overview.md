@@ -3,75 +3,92 @@
 ## 1. Purpose
 
 PiDbg enables .NET 10 C# developers to debug applications on Raspberry Pi ARM64 devices
-(Raspberry Pi OS 64-bit, Debian 12) directly from Visual Studio 2026 — with full IDE
-fidelity: breakpoints, stepping, watch windows, locals, call stacks, and async debugging.
+(Raspberry Pi OS 64-bit, Debian 12) directly from Visual Studio 2026 or VS Code — with full
+IDE fidelity: breakpoints, stepping, watch windows, locals, call stacks, and async debugging.
 
 It is not a custom debugger. It is an orchestration and transport layer that arranges
-Microsoft's vsdbg (the official .NET Core debugger) on the Pi and connects Visual Studio's
-existing debugger engine to it over a secured SSH tunnel.
+Microsoft's vsdbg (the official .NET Core debugger) on the Pi and connects the IDE's
+debugger engine to it over a secured SSH tunnel.
+
+Both IDE integrations share the same orchestration core (`PiDbg.Core`) and differ only in
+how the final debugger attach is handed off:
+
+| IDE | Attach mechanism |
+|-----|-----------------|
+| Visual Studio 2026 | MIEngine via `IVsDebugger4.LaunchDebugTargets4()` |
+| VS Code | `PiDbg.DebugAdapter` exe — DAP proxy between VS Code and vsdbg |
 
 ---
 
 ## 2. System Context Diagram
 
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│  Developer Machine  (Windows 10/11)                                       │
-│                                                                           │
-│  ┌──────────────────────────────────────────────────────────────────┐    │
-│  │  Visual Studio 2026                                              │    │
-│  │                                                                  │    │
-│  │  ┌────────────────────┐   ┌────────────────┐   ┌─────────────┐  │    │
-│  │  │  PiDbg VSIX        │   │  VS Debugger   │   │ Output Win  │  │    │
-│  │  │  ─────────────     │   │  Engine        │   │ (PiDbg)     │  │    │
-│  │  │  Debug profile     │   │  (.NET Core)   │   └─────────────┘  │    │
-│  │  │  Device manager    │   └────────┬───────┘                    │    │
-│  │  │  Deploy orchestr.  │            │ MIEngine/ICorDebug          │    │
-│  │  │  gRPC client       │            │ TCP → SSH tunnel            │    │
-│  │  └──────────┬─────────┘            │                            │    │
-│  │             │ gRPC (SSH tunnel)    │                            │    │
-│  └─────────────┼──────────────────────┼────────────────────────────┘    │
-│                │                      │                                   │
-│  ┌─────────────▼──────────────────────▼────────────────────────────┐    │
-│  │  SSH.NET Transport Layer                                         │    │
-│  │  ┌─────────────────────────────────────────────────────────┐    │    │
-│  │  │  Single SSH session per device                          │    │    │
-│  │  │  ForwardedPortLocal A → Pi:50051  (gRPC)               │    │    │
-│  │  │  ForwardedPortLocal B → Pi:4024+  (vsdbg TCP)          │    │    │
-│  │  │  SftpClient (same credentials)    (file deploy)        │    │    │
-│  │  └─────────────────────────────────────────────────────────┘    │    │
-│  └──────────────────────────┬───────────────────────────────────────┘    │
-└─────────────────────────────┼──────────────────────────────────────────┘
-                              │ SSH port 22
-                              │
-        ┌─────────────────────▼────────────────────────┐
-        │  Raspberry Pi  (ARM64, Debian 12)             │
-        │                                               │
-        │  ┌───────────────────────────────────────┐    │
-        │  │  pidbg-agent.service  (systemd user)  │    │
-        │  │  ──────────────────────────────────   │    │
-        │  │  gRPC server :50051 (127.0.0.1 only)  │    │
-        │  │  DeploymentManager                    │    │
-        │  │  ProcessLifecycleService              │    │
-        │  │  VsdbgManager                         │    │
-        │  └──────────────────┬────────────────────┘    │
-        │                     │ spawn                    │
-        │  ┌──────────────────▼────────────────────┐    │
-        │  │  vsdbg                                │    │
-        │  │  --server --port 4024                 │    │
-        │  │  (127.0.0.1 only)                     │    │
-        │  └──────────────────┬────────────────────┘    │
-        │                     │ launch / attach          │
-        │  ┌──────────────────▼────────────────────┐    │
-        │  │  .NET 10 Application (debug target)   │    │
-        │  └───────────────────────────────────────┘    │
-        │                                               │
-        │  ┌───────────────────────────────────────┐    │
-        │  │  meadow-daemon.service  (co-existing) │    │
-        │  │  REST :5000                           │    │
-        │  │  MPAK OTA update management           │    │
-        │  └───────────────────────────────────────┘    │
-        └───────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│  Developer Machine  (Windows 10/11)                                      │
+│                                                                          │
+│  ┌─────────────────────────────────┐  ┌──────────────────────────────┐  │
+│  │  Visual Studio 2026             │  │  VS Code                     │  │
+│  │                                 │  │                              │  │
+│  │  ┌─────────────┐  ┌──────────┐  │  │  ┌────────────────────────┐  │  │
+│  │  │ PiDbg VSIX  │  │VS Debug  │  │  │  │ PiDbg VS Code Ext.     │  │  │
+│  │  │ (F5 hook,   │  │Engine    │  │  │  │ (launch.json handler,  │  │  │
+│  │  │  profile UI)│  │MIEngine  │  │  │  │  status bar)           │  │  │
+│  │  └──────┬──────┘  └────┬─────┘  │  │  └───────────┬────────────┘  │  │
+│  │         │ PiDbg.Core   │MIEngine│  │              │ DAP (stdio)   │  │
+│  │         │ (shared)     │TCP     │  │  ┌───────────▼────────────┐  │  │
+│  └─────────┼──────────────┼────────┘  │  │ PiDbg.DebugAdapter.exe │  │  │
+│            │              │           │  │ (DAP server + proxy)   │  │  │
+│            │              │           │  │ uses PiDbg.Core        │  │  │
+│            │              │           │  └───────────┬────────────┘  │  │
+│            │              │           └──────────────┼───────────────┘  │
+│            │              │                          │                   │
+│  ┌─────────▼──────────────▼──────────────────────────▼─────────────┐   │
+│  │  PiDbg.Core  (shared orchestration library)                      │   │
+│  │  ┌──────────────────────────────────────────────────────────┐    │   │
+│  │  │  SessionOrchestrator: SSH → Provision → Publish →        │    │   │
+│  │  │    Deploy → StartDebugSession(gRPC) → OpenTunnel         │    │   │
+│  │  │  Returns: DebugSessionInfo { LocalPort, Pid, DllPath }   │    │   │
+│  │  └──────────────────────────────────────────────────────────┘    │   │
+│  │                                                                   │   │
+│  │  SSH.NET Transport Layer                                          │   │
+│  │  ┌─────────────────────────────────────────────────────────┐     │   │
+│  │  │  Single SSH session per device                          │     │   │
+│  │  │  ForwardedPortLocal A → Pi:50051  (gRPC)               │     │   │
+│  │  │  ForwardedPortLocal B → Pi:4024+  (vsdbg TCP)          │     │   │
+│  │  │  SftpClient (same credentials)    (file deploy)        │     │   │
+│  │  └─────────────────────────────────────────────────────────┘     │   │
+│  └─────────────────────────────┬─────────────────────────────────────┘  │
+└────────────────────────────────┼────────────────────────────────────────┘
+                                 │ SSH port 22
+                                 │
+         ┌───────────────────────▼──────────────────────┐
+         │  Raspberry Pi  (ARM64, Debian 12)             │
+         │                                               │
+         │  ┌───────────────────────────────────────┐    │
+         │  │  pidbg-agent.service  (systemd user)  │    │
+         │  │  ──────────────────────────────────   │    │
+         │  │  gRPC server :50051 (127.0.0.1 only)  │    │
+         │  │  DeploymentManager                    │    │
+         │  │  ProcessLifecycleService              │    │
+         │  │  VsdbgManager                         │    │
+         │  └──────────────────┬────────────────────┘    │
+         │                     │ spawn                    │
+         │  ┌──────────────────▼────────────────────┐    │
+         │  │  vsdbg                                │    │
+         │  │  --server --port 4024                 │    │
+         │  │  (127.0.0.1 only)                     │    │
+         │  └──────────────────┬────────────────────┘    │
+         │                     │ launch / attach          │
+         │  ┌──────────────────▼────────────────────┐    │
+         │  │  .NET 10 Application (debug target)   │    │
+         │  └───────────────────────────────────────┘    │
+         │                                               │
+         │  ┌───────────────────────────────────────┐    │
+         │  │  meadow-daemon.service  (co-existing) │    │
+         │  │  REST :5000                           │    │
+         │  │  MPAK OTA update management           │    │
+         │  └───────────────────────────────────────┘    │
+         └───────────────────────────────────────────────┘
 ```
 
 ---
@@ -79,21 +96,50 @@ existing debugger engine to it over a secured SSH tunnel.
 ## 3. Component Responsibilities
 
 ### 3.1  PiDbg.Vsix
-The Visual Studio extension. Owns the entire developer-machine side.
+The Visual Studio extension. Thin VS-specific shell.
 
 Responsibilities:
 - Register the "Raspberry Pi" debug profile type with VS
 - Provide property pages for profile configuration (device, port, user, key, app path)
 - Intercept F5 / start-without-debugging
-- Drive the full deploy → launch → attach sequence
+- Call `SessionOrchestrator` (from `PiDbg.Core`) to drive steps 1–6
+- Feed resulting `DebugSessionInfo` into `IVsDebugger4.LaunchDebugTargets4()` via MIEngine
 - Expose a Device Manager tool window
 - Stream agent logs to the VS Output window
 - Terminate the debug session cleanly on stop
 
 Does NOT:
-- Implement any debug engine logic
+- Implement any debug engine logic or DAP logic
 - Know anything about the ICorDebug protocol
-- Manage SSH keys (delegates to PiDbg.Transport)
+- Contain SSH, deployment, or provisioning logic (all in `PiDbg.Core`)
+
+### 3.1b  PiDbg.VsCodeExtension
+The VS Code extension. Thin TypeScript shell.
+
+Responsibilities:
+- Register the `pidbg` debug type in `package.json`
+- Return a `DebugAdapterExecutable` descriptor pointing at `PiDbg.DebugAdapter`
+- Provide `launch.json` schema contribution (host, port, user, key, appName)
+- Status bar item showing connection state
+- Device picker command
+
+Does NOT:
+- Implement any orchestration logic (all in `PiDbg.DebugAdapter` / `PiDbg.Core`)
+- Manage SSH, deployment, or gRPC
+
+### 3.1c  PiDbg.DebugAdapter
+Standalone .NET executable. The DAP server for VS Code.
+
+Responsibilities:
+- Implement the Debug Adapter Protocol (DAP) server on stdin/stdout
+- On `launch` request: drive steps 1–6 via `PiDbg.Core` (`SessionOrchestrator`)
+- After session is started: proxy DAP messages between VS Code and vsdbg over the SSH tunnel
+- On `disconnect`: tear down session and tunnel
+
+Does NOT:
+- Implement any debug engine internals
+- Have any VS or VS Code SDK references
+- Serve any network port (VS Code communicates via stdio)
 
 ### 3.2  PiDbg.Agent  (runs on Pi)
 The on-device orchestrator. Lightweight, single-file, self-contained .NET 10 ARM64 binary.
@@ -115,17 +161,28 @@ Does NOT:
 Protobuf definitions and generated gRPC code. Shared between VSIX and Agent.
 Also contains immutable DTO records and shared constants.
 
-### 3.4  PiDbg.Transport
-SSH.NET wrapper library. Manages the SSH session lifecycle, SFTP client, and port forwarding.
-Used exclusively by VSIX. The agent never uses this library.
+### 3.4  PiDbg.Core
+The shared orchestration library. Contains everything that both the VSIX and the
+`PiDbg.DebugAdapter` need to drive a debug session:
 
-### 3.5  PiDbg.Deployment
-Deployment packager and transfer logic. Used by VSIX.
+- `SessionOrchestrator` — drives steps 1–6 (connect → provision → publish → deploy →
+  start session → open tunnel), returns `DebugSessionInfo`
+- Thin façades over `PiDbg.Transport`, `PiDbg.Deployment`, and the gRPC client
+
+No VS SDK references. No TypeScript. Must be multi-targeted (net10.0 + net472) so the
+VSIX (net472) and DebugAdapter (net10.0) can both consume it.
+
+### 3.5  PiDbg.Transport
+SSH.NET wrapper library. Manages the SSH session lifecycle, SFTP client, and port forwarding.
+Used by `PiDbg.Core`. The agent never uses this library.
+
+### 3.6  PiDbg.Deployment
+Deployment packager and transfer logic. Used by `PiDbg.Core`.
 Packages dotnet publish output, transfers via SFTP, instructs agent to swap.
 
-### 3.6  PiDbg.DeviceManagement
+### 3.7  PiDbg.DeviceManagement
 Device registry (persistent JSON store), discovery (mDNS/Bonjour), and connection factory.
-Used by VSIX.
+Used by `PiDbg.Core` and both IDE extensions.
 
 ---
 
@@ -185,32 +242,50 @@ This is a REST call to 127.0.0.1:5000 — no SSH required.
 
 ## 5. Data Flow Summary
 
-### F5 Press → Breakpoint Hit
+### F5 Press → Breakpoint Hit (Visual Studio)
+
+Steps 1–16 are driven by `PiDbg.Core.SessionOrchestrator`. Steps 17–20 are VS-specific.
 
 ```
-1. VS calls PiDbg VSIX DebugLaunchProvider.QueryDebugTargetsAsync()
-2. VSIX reads active Raspberry Pi launch profile
-3. VSIX requests SSH connection from SshConnectionManager (connects or reuses)
-4. VSIX opens gRPC tunnel: localhost:A → Pi:50051
-5. VSIX calls AgentClient.GetStatusAsync() — verifies agent alive
-6. VSIX calls AgentClient.GetVsdbgInfoAsync() — verifies vsdbg installed
-7. MSBuild runs dotnet publish (self-triggered by VSIX via IBuildManager)
-8. DeploymentPackager bundles publish output + SHA-256 manifest
-9. VSIX streams deploy chunks over SFTP to Pi staging directory
-10. VSIX calls AgentClient.CommitDeploymentAsync() — agent does atomic rename
-11. VSIX allocates ephemeral local port B
-12. VSIX opens vsdbg tunnel: localhost:B → Pi:4024
-13. VSIX calls AgentClient.StartDebugSessionAsync(port=4024, appPath, args)
-14. Agent calls Meadow.Daemon REST to stop managed process
-15. Agent spawns: vsdbg --server --port 4024 -- dotnet /opt/pidbg/apps/X/current/App.dll
-16. VSIX receives session-started event with PID
-17. VSIX calls IVsDebugger4.LaunchDebugTargets4() with:
-      Engine: {2E36F1D4-B23C-435D-AB41-18E608940038} (Managed .NET Core)
-      Transport: TCP
-      Address: localhost:B
-18. VS debugger connects through tunnel to vsdbg
-19. vsdbg launches .NET app under debug
-20. Developer hits breakpoint
+1.  VS calls PiDbg VSIX DebugLaunchProvider.QueryDebugTargetsAsync()
+2.  VSIX reads active Raspberry Pi launch profile
+3.  SessionOrchestrator.RunAsync() begins:
+4.    SSH connection from SshConnectionManager (connects or reuses)
+5.    Opens gRPC tunnel: localhost:A → Pi:50051
+6.    AgentClient.GetStatusAsync() — verifies agent alive
+7.    AgentClient.GetVsdbgInfoAsync() — verifies vsdbg installed
+8.    MSBuild runs dotnet publish (via IBuildManager, VS-specific; adapter uses CLI)
+9.    DeploymentPackager bundles publish output + SHA-256 manifest
+10.   SFTP streams deploy chunks to Pi staging directory
+11.   AgentClient.CommitDeploymentAsync() — agent does atomic rename
+12.   Allocates ephemeral local port B
+13.   Opens vsdbg tunnel: localhost:B → Pi:4024
+14.   AgentClient.StartDebugSessionAsync(port=4024, appPath, args)
+15.   Agent calls Meadow.Daemon REST to stop managed process
+16.   Agent spawns: vsdbg --server --port 4024 -- dotnet /opt/.../App.dll
+17. SessionOrchestrator returns DebugSessionInfo { LocalPort=B, Pid, DllPath }
+18. VSIX calls IVsDebugger4.LaunchDebugTargets4() with MIEngine + TCP localhost:B
+19. VS debugger connects through tunnel to vsdbg
+20. vsdbg attaches to .NET app
+21. Developer hits breakpoint
+```
+
+### F5 Press → Breakpoint Hit (VS Code)
+
+Steps 1–16 are identical (same `PiDbg.Core.SessionOrchestrator`). Step 17+ differs.
+
+```
+1.  VS Code reads launch.json (type: "pidbg")
+2.  PiDbg VS Code extension returns DebugAdapterExecutable("pidbg-adapter.exe")
+3.  VS Code spawns pidbg-adapter.exe, communicates via DAP on stdio
+4.  Adapter receives DAP "launch" request
+5.  Adapter calls SessionOrchestrator.RunAsync() — steps 4–16 above
+6.  SessionOrchestrator returns DebugSessionInfo { LocalPort=B, Pid, DllPath }
+7.  Adapter sends DAP "initialized" event to VS Code
+8.  Adapter opens TCP connection to localhost:B (vsdbg)
+9.  Adapter proxies DAP messages: VS Code stdio ↔ vsdbg TCP
+10. vsdbg attaches to .NET app
+11. Developer hits breakpoint
 ```
 
 ---
@@ -237,4 +312,5 @@ This is a REST call to 127.0.0.1:5000 — no SSH required.
 - No support for non-Debian Linux (initially)
 - No support for .NET Framework or Mono
 - No Windows SSH server support
-- No GUI installer for developer machine (VSIX handles it)
+- No GUI installer for developer machine (VSIX / VS Code extension handles it)
+- No Neovim / other editor DAP clients (architecture permits it, but not V1)
