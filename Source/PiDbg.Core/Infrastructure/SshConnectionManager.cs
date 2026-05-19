@@ -5,21 +5,22 @@ using System.Linq;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Renci.SshNet;
 using Renci.SshNet.Common;
 
 namespace PiDbg.Infrastructure;
 
-internal sealed class SshConnectionManager : ISshConnectionManager, IDisposable
+public sealed class SshConnectionManager : ISshConnectionManager, IDisposable
 {
     private readonly ConcurrentDictionary<string, SshSession> _sessions =
         new ConcurrentDictionary<string, SshSession>(StringComparer.OrdinalIgnoreCase);
 
-    private readonly IOutputWindowService _output;
+    private readonly ILogger<SshConnectionManager> _logger;
 
-    public SshConnectionManager(IOutputWindowService output)
+    public SshConnectionManager(ILogger<SshConnectionManager> logger)
     {
-        _output = output;
+        _logger = logger;
     }
 
     public async Task<SshSession> ConnectAsync(SshConnectionConfig config, CancellationToken ct)
@@ -39,8 +40,7 @@ internal sealed class SshConnectionManager : ISshConnectionManager, IDisposable
         var session  = await ConnectWithRetryAsync(connInfo, config.Host, ct).ConfigureAwait(false);
 
         _sessions[key] = session;
-        _output.WriteLine(OutputPane.PiDbg,
-            $"Connected to {config.Host}:{config.Port} as {config.User}");
+        _logger.LogInformation("Connected to {Host}:{Port} as {User}", config.Host, config.Port, config.User);
         return session;
     }
 
@@ -50,7 +50,7 @@ internal sealed class SshConnectionManager : ISshConnectionManager, IDisposable
         const int maxAttempts = 3;
         const int backoffMs   = 2000;
 
-        Exception last = null;
+        Exception? last = null;
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
             ct.ThrowIfCancellationRequested();
@@ -58,15 +58,14 @@ internal sealed class SshConnectionManager : ISshConnectionManager, IDisposable
             {
                 var ssh  = new SshClient(connInfo);
                 var sftp = new SftpClient(connInfo);
-                await Task.Run(() => { ssh.Connect(); sftp.Connect(); }, ct)
-                          .ConfigureAwait(false);
+                await Task.Run(() => { ssh.Connect(); sftp.Connect(); }, ct).ConfigureAwait(false);
                 return new SshSession(ssh, sftp, host);
             }
             catch (Exception ex) when (ex is SocketException || ex is SshException)
             {
                 last = ex;
-                _output.WriteWarning(OutputPane.PiDbg,
-                    $"SSH connect attempt {attempt}/{maxAttempts} to {host} failed: {ex.Message}");
+                _logger.LogWarning("SSH connect attempt {Attempt}/{Max} to {Host} failed: {Error}",
+                    attempt, maxAttempts, host, ex.Message);
 
                 if (attempt < maxAttempts)
                     await Task.Delay(backoffMs, ct).ConfigureAwait(false);
@@ -87,10 +86,10 @@ internal sealed class SshConnectionManager : ISshConnectionManager, IDisposable
             if (_sessions.TryRemove(key, out var session))
                 session.Dispose();
         }
-        _output.WriteLine(OutputPane.PiDbg, $"Disconnected from {host}");
+        _logger.LogInformation("Disconnected from {Host}", host);
     }
 
-    public SshSession GetActiveSession(string host)
+    public SshSession? GetActiveSession(string host)
     {
         foreach (var kvp in _sessions)
         {

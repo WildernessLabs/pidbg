@@ -1,0 +1,95 @@
+{
+  "name": "pidbg",
+  "displayName": "PiDbg — Raspberry Pi .NET Debugger",
+  "description": "Debug .NET 10 applications on Raspberry Pi ARM64 from VS Code",
+  "version": "0.1.0",
+  "publisher": "wildernessLabs",
+  "engines": { "vscode": "^1.90.0" },
+  "categories": ["Debuggers"],
+  "activationEvents": ["onDebug"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "debuggers": [
+      {
+        "type": "pidbg",
+        "label": "Raspberry Pi (.NET)",
+        "languages": ["csharp"],
+        "program": "./bin/pidbg-adapter.exe",
+        "runtime": "",
+        "configurationAttributes": {
+          "launch": {
+            "required": ["host", "username", "appName", "projectPath"],
+            "properties": {
+              "host":           { "type": "string",  "description": "Pi hostname or IP address" },
+              "port":           { "type": "number",  "description": "SSH port (default 22)", "default": 22 },
+              "username":       { "type": "string",  "description": "SSH username" },
+              "privateKeyPath": { "type": "string",  "description": "Path to SSH private key file" },
+              "password":       { "type": "string",  "description": "SSH password (prefer key auth)" },
+              "appName":        { "type": "string",  "description": "Application name (used for deployment path)" },
+              "projectPath":    { "type": "string",  "description": "Absolute path to .csproj file" },
+              "rootFolder":     { "type": "string",  "description": "Root folder on Pi (default ~/meadow)", "default": "~/meadow" },
+              "args":           { "type": "array",   "items": { "type": "string" }, "description": "Arguments passed to the application" }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type":           "pidbg",
+            "request":        "launch",
+            "name":           "Debug on Raspberry Pi",
+            "host":           "raspberrypi.local",
+            "username":       "pi",
+            "privateKeyPath": "${userHome}/.ssh/pidbg_rsa",
+            "appName":        "${workspaceFolderBasename}",
+            "projectPath":    "${workspaceFolder}/${workspaceFolderBasename}.csproj"
+          }
+        ],
+        "configurationSnippets": [
+          {
+            "label": "PiDbg: Debug on Raspberry Pi",
+            "description": "Debug a .NET application on a Raspberry Pi",
+            "body": {
+              "type":           "pidbg",
+              "request":        "launch",
+              "name":           "Debug on Raspberry Pi",
+              "host":           "${1:raspberrypi.local}",
+              "username":       "${2:pi}",
+              "privateKeyPath": "${userHome}/.ssh/pidbg_rsa",
+              "appName":        "${workspaceFolderBasename}",
+              "projectPath":    "${workspaceFolder}/${workspaceFolderBasename}.csproj"
+            }
+          }
+        ]
+      }
+    ],
+    "breakpoints": [
+      { "language": "csharp" }
+    ],
+    "commands": [
+      {
+        "command": "pidbg.connectToDevice",
+        "title":   "PiDbg: Connect to Device",
+        "category": "PiDbg"
+      },
+      {
+        "command": "pidbg.showOutput",
+        "title":   "PiDbg: Show Output",
+        "category": "PiDbg"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch":   "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node":   "^20.0.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce":  "^2.29.0",
+    "typescript":    "^5.4.0"
+  },
+  "dependencies": {
+    "@vscode/debugadapter": "^1.65.0"
+  }
+}

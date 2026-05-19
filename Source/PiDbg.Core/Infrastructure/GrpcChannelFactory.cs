@@ -7,9 +7,7 @@ using Renci.SshNet;
 
 namespace PiDbg.Infrastructure;
 
-// Creates and caches Grpc.Core channels tunnelled through SSH port-forwards.
-// Uses Grpc.Core (C-core) because the VSIX targets net472.
-internal sealed class GrpcChannelFactory : IGrpcChannelFactory, IDisposable
+public sealed class GrpcChannelFactory : IGrpcChannelFactory, IDisposable
 {
     private readonly ConcurrentDictionary<string, (Channel Channel, ForwardedPortLocal Tunnel)>
         _channels = new ConcurrentDictionary<string, (Channel, ForwardedPortLocal)>(
@@ -20,7 +18,6 @@ internal sealed class GrpcChannelFactory : IGrpcChannelFactory, IDisposable
         if (_channels.TryGetValue(session.Host, out var existing) && existing.Tunnel.IsStarted)
             return existing.Channel;
 
-        // Open SSH tunnel: daemon gRPC port 50051 → OS-assigned local port
         var (tunnel, localPort) = await session.OpenTunnelAsync(50051, ct).ConfigureAwait(false);
 
         var channel = new Channel("127.0.0.1", localPort, ChannelCredentials.Insecure,

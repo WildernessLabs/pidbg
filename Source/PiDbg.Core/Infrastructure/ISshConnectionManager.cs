@@ -1,9 +1,11 @@
+using System.Threading;
+using System.Threading.Tasks;
+
 namespace PiDbg.Infrastructure;
 
 public interface ISshConnectionManager
 {
-    System.Threading.Tasks.Task<SshSession> ConnectAsync(
-        SshConnectionConfig config, System.Threading.CancellationToken ct);
+    Task<SshSession> ConnectAsync(SshConnectionConfig config, CancellationToken ct);
     void Disconnect(string host);
     SshSession? GetActiveSession(string host);
 }

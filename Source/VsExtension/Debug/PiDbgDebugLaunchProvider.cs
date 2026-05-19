@@ -1,15 +1,11 @@
 using System.ComponentModel.Composition;
 
-using Meadow.Daemon.Contracts.V1;
-
 using Microsoft.VisualStudio.ProjectSystem;
 using Microsoft.VisualStudio.ProjectSystem.Debug;
 using Microsoft.VisualStudio.ProjectSystem.VS.Debug;
 
-using PiDbg.Build;
-using PiDbg.Deploy;
+using PiDbg.Core;
 using PiDbg.Infrastructure;
-using PiDbg.Provisioning;
 
 namespace PiDbg.Debug;
 
@@ -45,11 +41,10 @@ internal sealed class PiDbgDebugLaunchProvider : IDebugLaunchProvider
     public async Task<IReadOnlyList<IDebugLaunchSettings>> QueryDebugTargetsAsync(
         DebugLaunchOptions launchOptions)
     {
-        var pkg = PiDbgPackage.Current
+        _ = PiDbgPackage.Current
             ?? throw new InvalidOperationException("PiDbg package is not yet initialized.");
 
-        var output = PiDbgPackage.OutputWindow;
-
+        var output      = PiDbgPackage.OutputWindow;
         var projectFile = _project.UnconfiguredProject.FullPath;
 
         using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
@@ -59,93 +54,37 @@ internal sealed class PiDbgDebugLaunchProvider : IDebugLaunchProvider
             ?? throw new InvalidOperationException(
                 "Pi profile not found. Use 'Connect to Pi' to configure the connection.");
 
-        var config = profile.Config;
-        var appName = profile.AppName;
-
-        if (string.IsNullOrEmpty(config.Host))
+        if (string.IsNullOrEmpty(profile.Config.Host))
             throw new InvalidOperationException(
                 "Pi host is not configured. Use 'Connect to Pi' to set up the connection.");
 
-        output.WriteLine(OutputPane.PiDbg, $"=== PiDbg: {appName} on {config.Host} ===");
+        var request = new SessionRequest
+        {
+            Connection  = profile.Config,
+            AppName     = profile.AppName,
+            ProjectPath = projectFile,
+        };
 
-        // --- Step 1: SSH connection ---
-        var session = await PiDbgPackage.Ssh
-            .ConnectAsync(config, ct).ConfigureAwait(false);
+        var progress = new Progress<string>(msg => output.WriteLine(OutputPane.PiDbg, msg));
 
-        // --- Step 2: Provision (idempotent) ---
-        output.WriteLine(OutputPane.PiDbg, "Provisioning...");
-        var provision = await ProvisioningOrchestrator
-            .ProvisionAsync(session, PiDbgPackage.GrpcChannels, output, config.RootFolder, ct)
+        // Steps 1–6: SSH → provision → publish → deploy → start session → tunnel
+        var info = await PiDbgPackage.Orchestrator
+            .RunAsync(request, progress, ct)
             .ConfigureAwait(false);
 
-        if (!provision.Success)
-            throw new InvalidOperationException(
-                $"Provisioning failed: {provision.Error}\n" +
-                "See the 'PiDbg' output pane for details.");
-
-        var channel = provision.Channel!;
-
-        // --- Step 3: Publish ---
-        output.WriteLine(OutputPane.PiDbg, "Publishing...");
-        var publisher = new PublishService(output);
-        var publishResult = await publisher.PublishAsync(
-            projectFile, appName,
-            new Progress<string>(s => output.WriteLine(OutputPane.PiDbg, $"  {s}")),
-            ct).ConfigureAwait(false);
-
-        output.WriteLine(OutputPane.PiDbg,
-            $"Published in {publishResult.Duration.TotalSeconds:F1}s");
-
-        // --- Step 4: Deploy ---
-        output.WriteLine(OutputPane.PiDbg, "Deploying...");
-        var deployer = new SftpDeploymentClient(session, channel, output);
-        await deployer.DeployAsync(
-            appName, publishResult.PublishDir, publishResult.Manifest,
-            new Progress<DeploymentProgress>(p =>
-                output.WriteLine(OutputPane.PiDbg, $"  [{p.Phase}] {p.PercentComplete}%")),
-            ct).ConfigureAwait(false);
-
-        // --- Step 5: Start debug session on daemon ---
-        output.WriteLine(OutputPane.PiDbg, "Starting debug session...");
-        var grpc = new MeadowDaemonService.MeadowDaemonServiceClient(channel);
-        var sessionResp = await grpc.StartDebugSessionAsync(
-            new StartDebugSessionRequest
-            {
-                AppName = appName,
-                Mode = SessionMode.Attach,
-                CorrelationId = Guid.NewGuid().ToString(),
-            },
-            cancellationToken: ct).ConfigureAwait(false);
-
-        if (!sessionResp.Success)
-            throw new InvalidOperationException(
-                $"Failed to start debug session: {sessionResp.ErrorMessage}");
-
-        // --- Step 6: Open SSH tunnel for vsdbg port ---
-        var localPort = await PiDbgPackage.Tunnels
-            .OpenDebugTunnelAsync(session, sessionResp.VsdbgPort, ct)
-            .ConfigureAwait(false);
-
-        output.WriteLine(OutputPane.PiDbg,
-            $"Tunnel: localhost:{localPort} → {config.Host}:{sessionResp.VsdbgPort}");
         output.WriteLine(OutputPane.PiDbg, "Attaching VS debugger...");
 
-        // --- Step 7: Build VS debug target using MIEngine + TcpLaunchOptions ---
-        // MIEngine with DebuggerMIMode="vsdbg" speaks DAP with vsdbg.
-        // The daemon's TCP proxy pipes the tunnel connection to vsdbg's stdin/stdout.
-        var absRoot    = session.ExpandPath(config.RootFolder);
-        var appDllPath = $"{absRoot}/apps/{appName}/debug/{appName}.dll";
-
+        // Step 7 (VS-specific): hand off to MIEngine via TcpLaunchOptions
         var tcpOptions = $"""
             <TcpLaunchOptions xmlns="http://schemas.microsoft.com/vstudio/MDDDebuggerOptions/2014"
                 Hostname="127.0.0.1"
-                Port="{localPort}"
-                ExePath="{appDllPath}"
+                Port="{info.LocalPort}"
+                ExePath="{info.AppDllPath}"
                 TargetArchitecture="arm64"
                 AdditionalSOLibSearchPath=""
                 DebuggerMIMode="vsdbg">
                 <AttachInfo>
-                    <AttachInfoItem Name="ProcessId" Value="{sessionResp.AppPid}"/>
+                    <AttachInfoItem Name="ProcessId" Value="{info.AppPid}"/>
                 </AttachInfo>
             </TcpLaunchOptions>
             """;
@@ -155,7 +94,7 @@ internal sealed class PiDbgDebugLaunchProvider : IDebugLaunchProvider
             LaunchDebugEngineGuid = MiEngineGuid,
             LaunchOperation       = DebugLaunchOperation.CreateProcess,
             Options               = tcpOptions,
-            Executable            = appDllPath,
+            Executable            = info.AppDllPath,
         };
 
         return new IDebugLaunchSettings[] { settings };

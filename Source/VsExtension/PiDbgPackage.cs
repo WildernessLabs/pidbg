@@ -2,8 +2,11 @@ using System.Runtime.InteropServices;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 
+using PiDbg.Build;
 using PiDbg.Commands;
+using PiDbg.Core;
 using PiDbg.Infrastructure;
+using PiDbg.Provisioning;
 
 namespace PiDbg;
 
@@ -20,6 +23,7 @@ public sealed class PiDbgPackage : AsyncPackage
     public static ISshConnectionManager Ssh { get; private set; } = null!;
     public static IGrpcChannelFactory GrpcChannels { get; private set; } = null!;
     public static IDebugTunnelManager Tunnels { get; private set; } = null!;
+    public static SessionOrchestrator Orchestrator { get; private set; } = null!;
 
     protected override async Task InitializeAsync(
         CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
@@ -27,17 +31,24 @@ public sealed class PiDbgPackage : AsyncPackage
         Current = this;
 
         await base.InitializeAsync(cancellationToken, progress);
-        
-        // Switch to UI thread for services that interact with the shell
+
         await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
 
         try
         {
-            // Initialize infrastructure services
             OutputWindow = new OutputWindowService(this);
-            Ssh = new SshConnectionManager(OutputWindow);
+
+            Ssh          = new SshConnectionManager(new VsOutputWindowLogger<SshConnectionManager>(OutputWindow));
             GrpcChannels = new GrpcChannelFactory();
-            Tunnels = new DebugTunnelManager();
+            Tunnels      = new DebugTunnelManager();
+
+            IProvisioningService provisioning = new VsProvisioningService(GrpcChannels, OutputWindow);
+            IPublishRunner       publisher    = new CliPublishRunner(new VsOutputWindowLogger<CliPublishRunner>(OutputWindow));
+
+            Orchestrator = new SessionOrchestrator(
+                Ssh, GrpcChannels, Tunnels,
+                publisher, provisioning,
+                new VsOutputWindowLogger<SessionOrchestrator>(OutputWindow));
 
             await DebugOnPiCommand.InitializeAsync(this);
             await ConnectCommand.InitializeAsync(this);

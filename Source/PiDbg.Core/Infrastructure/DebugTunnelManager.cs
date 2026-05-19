@@ -6,7 +6,7 @@ using Renci.SshNet;
 
 namespace PiDbg.Infrastructure;
 
-internal sealed class DebugTunnelManager : IDebugTunnelManager, IDisposable
+public sealed class DebugTunnelManager : IDebugTunnelManager, IDisposable
 {
     private readonly ConcurrentDictionary<int, ForwardedPortLocal> _tunnels =
         new ConcurrentDictionary<int, ForwardedPortLocal>();
@@ -14,8 +14,7 @@ internal sealed class DebugTunnelManager : IDebugTunnelManager, IDisposable
     public async Task<int> OpenDebugTunnelAsync(
         SshSession session, int vsdbgPort, CancellationToken ct)
     {
-        var (fwd, localPort) = await session.OpenTunnelAsync(vsdbgPort, ct)
-                                            .ConfigureAwait(false);
+        var (fwd, localPort) = await session.OpenTunnelAsync(vsdbgPort, ct).ConfigureAwait(false);
 
         // Keep-alive prevents SSH idle-timeout from dropping long debug sessions
         session.Ssh.KeepAliveInterval = TimeSpan.FromSeconds(30);
@@ -34,7 +33,7 @@ internal sealed class DebugTunnelManager : IDebugTunnelManager, IDisposable
     {
         foreach (var fwd in _tunnels.Values)
         {
-            try { fwd.Stop(); } catch { /* ignore — session may already be gone */ }
+            try { fwd.Stop(); } catch { /* session may already be gone */ }
         }
         _tunnels.Clear();
     }

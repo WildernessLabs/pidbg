@@ -30,6 +30,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Meadow.Daemon.Contracts\Meadow.Daemon.Contracts.csproj" />
+    <ProjectReference Include="..\PiDbg.Core\PiDbg.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -43,11 +44,9 @@
     <PackageReference Include="Microsoft.VisualStudio.ProjectSystem.VS" />
     <PackageReference Include="Microsoft.VisualStudio.ProjectSystem.SDK" />
 
-    <!-- SSH / gRPC -->
-    <PackageReference Include="SSH.NET" />
-    <PackageReference Include="Grpc.Core" />
-    <PackageReference Include="Google.Protobuf" />
+    <!-- SSH / gRPC / Crypto now come transitively from PiDbg.Core -->
     <PackageReference Include="System.Security.Cryptography.Xml" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>

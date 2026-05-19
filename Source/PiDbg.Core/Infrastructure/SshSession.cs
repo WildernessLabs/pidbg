@@ -58,7 +58,6 @@ public sealed class SshSession : IDisposable
         Ssh.AddForwardedPort(fwd);
         fwd.Start();
 
-        // Poll until OS assigns a port (typically < 50 ms)
         var deadline = DateTime.UtcNow.AddSeconds(5);
         while (fwd.BoundPort == 0 && DateTime.UtcNow < deadline)
             await Task.Delay(20, ct).ConfigureAwait(false);
@@ -84,12 +83,12 @@ public sealed class SshSession : IDisposable
             lock (_dirLock)
                 added = _createdDirs.Add(current);
 
-            if (!added) continue; // already ensured this session
+            if (!added) continue;
 
             if (!Sftp.Exists(current))
             {
                 try { Sftp.CreateDirectory(current); }
-                catch { /* concurrent creation from another upload — ignore */ }
+                catch { /* concurrent creation — ignore */ }
             }
         }
     }
