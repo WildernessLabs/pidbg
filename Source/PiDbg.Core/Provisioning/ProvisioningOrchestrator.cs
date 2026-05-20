@@ -129,7 +129,7 @@ public static class ProvisioningOrchestrator
 
         // --- Step 5: Open gRPC channel ---
         progress.Report("[5/7] Connecting to daemon...");
-        Channel channel;
+        ChannelBase channel;
         try
         {
             channel = await channelFactory.GetOrCreateChannelAsync(session, ct).ConfigureAwait(false);

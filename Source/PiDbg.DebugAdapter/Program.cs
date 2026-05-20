@@ -35,7 +35,7 @@ var orchLogger    = logFactory.CreateLogger<SessionOrchestrator>();
 var adapterLogger = logFactory.CreateLogger<PiDbgDebugAdapter>();
 
 var ssh          = new SshConnectionManager(sshLogger);
-var grpcChannels = new GrpcChannelFactory();
+var grpcChannels = new NetGrpcChannelFactory();
 var tunnels      = new DebugTunnelManager();
 var provisioning = new CliProvisioningService(grpcChannels, provLogger);
 var publisher    = new CliPublishRunner(cliLogger);

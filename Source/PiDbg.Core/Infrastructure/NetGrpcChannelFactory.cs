@@ -1,17 +1,16 @@
-using System;
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 using Grpc.Core;
+using Grpc.Net.Client;
 using Renci.SshNet;
 
 namespace PiDbg.Infrastructure;
 
-public sealed class GrpcChannelFactory : IGrpcChannelFactory, IDisposable
+public sealed class NetGrpcChannelFactory : IGrpcChannelFactory, IDisposable
 {
     private readonly ConcurrentDictionary<string, (ChannelBase Channel, ForwardedPortLocal Tunnel)>
-        _channels = new ConcurrentDictionary<string, (ChannelBase, ForwardedPortLocal)>(
-            StringComparer.OrdinalIgnoreCase);
+        _channels = new(StringComparer.OrdinalIgnoreCase);
 
     public async Task<ChannelBase> GetOrCreateChannelAsync(SshSession session, CancellationToken ct)
     {
@@ -20,12 +19,7 @@ public sealed class GrpcChannelFactory : IGrpcChannelFactory, IDisposable
 
         var (tunnel, localPort) = await session.OpenTunnelAsync(50051, ct).ConfigureAwait(false);
 
-        var channel = new Channel("127.0.0.1", localPort, ChannelCredentials.Insecure,
-            new[]
-            {
-                new ChannelOption(ChannelOptions.MaxReceiveMessageLength, 64 * 1024 * 1024),
-                new ChannelOption(ChannelOptions.MaxSendMessageLength,    64 * 1024 * 1024),
-            });
+        var channel = GrpcChannel.ForAddress($"http://127.0.0.1:{localPort}");
 
         _channels[session.Host] = (channel, tunnel);
         return channel;

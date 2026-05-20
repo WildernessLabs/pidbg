@@ -134,7 +134,7 @@ internal static class DaemonInstaller
     }
 
     public static async Task<bool> WaitForHealthAsync(
-        Channel channel, TimeSpan timeout, CancellationToken ct)
+        ChannelBase channel, TimeSpan timeout, CancellationToken ct)
     {
         var client   = new MeadowDaemonService.MeadowDaemonServiceClient(channel);
         var deadline = DateTimeOffset.UtcNow + timeout;

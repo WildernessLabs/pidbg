@@ -19,5 +19,5 @@ public sealed record ProvisioningOutcome
 {
     public bool    Success     { get; init; }
     public string? Error       { get; init; }
-    public Channel? GrpcChannel { get; init; }
+    public ChannelBase? GrpcChannel { get; init; }
 }

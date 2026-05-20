@@ -25,10 +25,10 @@ public sealed record DeploymentProgress(string Phase, long BytesSent, long Total
 public sealed partial class SftpDeploymentClient
 {
     private readonly SshSession _session;
-    private readonly Channel    _channel;
+    private readonly ChannelBase _channel;
     private readonly ILogger    _logger;
 
-    public SftpDeploymentClient(SshSession session, Channel channel, ILogger logger)
+    public SftpDeploymentClient(SshSession session, ChannelBase channel, ILogger logger)
     {
         _session = session;
         _channel = channel;

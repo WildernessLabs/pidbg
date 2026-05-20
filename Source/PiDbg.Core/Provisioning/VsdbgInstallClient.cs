@@ -26,7 +26,7 @@ internal static class VsdbgInstallClient
 
     public static async Task InstallAsync(
         SshSession session,
-        Channel channel,
+        ChannelBase channel,
         string rootFolder,
         IProgress<string> progress,
         CancellationToken ct)

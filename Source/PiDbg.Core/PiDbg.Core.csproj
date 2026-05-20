@@ -13,6 +13,7 @@
   <ItemGroup>
     <PackageReference Include="SSH.NET" />
     <PackageReference Include="Grpc.Core" />
+    <PackageReference Include="Grpc.Net.Client" Condition="'$(TargetFramework)' == 'net9.0'" />
     <PackageReference Include="Google.Protobuf" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <!-- System.Text.Json is in-box for net9.0; the package backfills net472 via netstandard2.0 -->
@@ -22,6 +23,11 @@
   <!-- System.Net.Http is not auto-referenced in SDK-style projects targeting net472 -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net472'">
     <Reference Include="System.Net.Http" />
+  </ItemGroup>
+
+  <!-- NetGrpcChannelFactory uses Grpc.Net.Client which is unavailable on net472 -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net472'">
+    <Compile Remove="Infrastructure\NetGrpcChannelFactory.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -15,5 +15,5 @@ public sealed class ProvisioningResult
     public bool Success { get; set; }
     public IReadOnlyList<ProvisioningStep> Steps { get; set; } = new List<ProvisioningStep>();
     public string? Error { get; set; }
-    public Channel? Channel { get; set; }
+    public ChannelBase? Channel { get; set; }
 }

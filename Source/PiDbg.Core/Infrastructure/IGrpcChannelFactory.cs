@@ -6,6 +6,6 @@ namespace PiDbg.Infrastructure;
 
 public interface IGrpcChannelFactory
 {
-    Task<Channel> GetOrCreateChannelAsync(SshSession session, CancellationToken ct);
+    Task<ChannelBase> GetOrCreateChannelAsync(SshSession session, CancellationToken ct);
     void DisposeChannel(string host);
 }

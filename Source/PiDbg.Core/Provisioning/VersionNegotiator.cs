@@ -10,7 +10,7 @@ internal static class VersionNegotiator
 {
     private static readonly VersionManifest Manifest = VersionManifest.Load();
 
-    public static async Task<NegotiationResult> NegotiateAsync(Channel channel, CancellationToken ct)
+    public static async Task<NegotiationResult> NegotiateAsync(ChannelBase channel, CancellationToken ct)
     {
         var client = new MeadowDaemonService.MeadowDaemonServiceClient(channel);
 
