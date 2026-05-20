@@ -48,8 +48,7 @@ try
 
     if (info is not null)
     {
-        logFactory.CreateLogger("DapProxy").LogInformation(
-            "Proxying DAP: VS Code ↔ vsdbg at localhost:{Port}", info.LocalPort);
+        ProgramLog.ProxyStarted(logFactory.CreateLogger("DapProxy"), info.LocalPort);
 
         using var proxy = await DapProxy.ConnectAsync(
             reader, writer,
@@ -70,7 +69,7 @@ try
 catch (OperationCanceledException) { /* clean exit */ }
 catch (Exception ex)
 {
-    logFactory.CreateLogger("Program").LogCritical(ex, "Adapter crashed");
+    ProgramLog.AdapterCrashed(logFactory.CreateLogger("Program"), ex);
     return 1;
 }
 finally

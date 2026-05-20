@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Threading;
@@ -15,9 +16,7 @@ internal sealed class DapReader
 
     public async Task<string?> ReadMessageAsync(CancellationToken ct)
     {
-        // Read headers until blank line
-        var headerBuilder = new StringBuilder();
-        int contentLength  = -1;
+        int contentLength = -1;
 
         while (true)
         {
@@ -26,7 +25,9 @@ internal sealed class DapReader
             if (line.Length == 0) break;         // blank line = end of headers
 
             if (line.StartsWith("Content-Length:", System.StringComparison.OrdinalIgnoreCase))
-                contentLength = int.Parse(line.Substring("Content-Length:".Length).Trim());
+                contentLength = int.Parse(
+                    line.Substring("Content-Length:".Length).Trim(),
+                    CultureInfo.InvariantCulture);
         }
 
         if (contentLength <= 0) return null;
@@ -35,7 +36,8 @@ internal sealed class DapReader
         var offset = 0;
         while (offset < contentLength)
         {
-            var read = await _stream.ReadAsync(buf, offset, contentLength - offset, ct).ConfigureAwait(false);
+            var read = await _stream.ReadAsync(buf.AsMemory(offset, contentLength - offset), ct)
+                .ConfigureAwait(false);
             if (read == 0) return null;
             offset += read;
         }
@@ -45,12 +47,12 @@ internal sealed class DapReader
 
     private async Task<string?> ReadLineAsync(CancellationToken ct)
     {
-        var sb = new StringBuilder();
+        var sb      = new StringBuilder();
         var oneByte = new byte[1];
 
         while (true)
         {
-            var read = await _stream.ReadAsync(oneByte, 0, 1, ct).ConfigureAwait(false);
+            var read = await _stream.ReadAsync(oneByte.AsMemory(), ct).ConfigureAwait(false);
             if (read == 0) return sb.Length == 0 ? null : sb.ToString();
 
             var ch = (char)oneByte[0];

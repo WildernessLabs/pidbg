@@ -11,7 +11,7 @@ using PiDbg.Infrastructure;
 namespace PiDbg.DebugAdapter;
 
 // Handles the DAP conversation with VS Code until the proxy takes over.
-internal sealed class PiDbgDebugAdapter
+internal sealed partial class PiDbgDebugAdapter
 {
     private readonly DapReader _reader;
     private readonly DapWriter _writer;
@@ -46,7 +46,7 @@ internal sealed class PiDbgDebugAdapter
             var msg = DapMessage.TryParse(json);
             if (msg is null) continue;
 
-            _logger.LogDebug("← {Type} {Command}", msg.Type, msg.Command ?? msg.Event);
+            LogReceived(_logger, msg.Type, msg.Command ?? msg.Event);
 
             if (msg.Type == "request")
             {
@@ -58,19 +58,18 @@ internal sealed class PiDbgDebugAdapter
 
                     case "launch":
                         sessionInfo = await HandleLaunchAsync(msg, ct).ConfigureAwait(false);
-                        if (sessionInfo is null) return (null, null); // launch failed
+                        if (sessionInfo is null) return (null, null);
                         break;
 
                     case "setBreakpoints":
                     case "setFunctionBreakpoints":
                     case "setExceptionBreakpoints":
                     case "configurationDone":
-                        // Ack these — vsdbg will handle the real breakpoint setup via proxy
                         await SendResponseAsync(msg.Seq, msg.Command!, success: true, ct: ct)
                             .ConfigureAwait(false);
 
                         if (msg.Command == "configurationDone")
-                            return (sessionInfo, null); // hand off to proxy
+                            return (sessionInfo, null);
                         break;
 
                     case "disconnect":
@@ -100,7 +99,6 @@ internal sealed class PiDbgDebugAdapter
         await SendResponseAsync(msg.Seq, "initialize", success: true, body: capabilities, ct: ct)
             .ConfigureAwait(false);
 
-        // Send initialized event — VS Code will now send breakpoint configs
         await SendEventAsync("initialized", body: (object?)null, ct).ConfigureAwait(false);
     }
 
@@ -141,7 +139,6 @@ internal sealed class PiDbgDebugAdapter
             return null;
         }
 
-        // Ack launch immediately; progress goes to Debug Console via output events
         await SendResponseAsync(msg.Seq, "launch", success: true, ct: ct).ConfigureAwait(false);
 
         var progress = new Progress<string>(line =>
@@ -156,7 +153,7 @@ internal sealed class PiDbgDebugAdapter
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Session orchestration failed");
+            LogOrchestrationFailed(_logger, ex);
             await SendEventAsync("output",
                 new { category = "stderr", output = $"PiDbg error: {ex.Message}\n" }, ct)
                 .ConfigureAwait(false);
@@ -170,7 +167,7 @@ internal sealed class PiDbgDebugAdapter
         object? body = null, CancellationToken ct = default)
     {
         var json = DapMessage.BuildResponse(requestSeq, NextSeq(), command, success, body);
-        _logger.LogDebug("→ response {Command} success={Success}", command, success);
+        LogSendResponse(_logger, command, success);
         return _writer.WriteMessageAsync(json, ct);
     }
 
@@ -181,9 +178,21 @@ internal sealed class PiDbgDebugAdapter
     private Task SendEventAsync(string eventName, object? body, CancellationToken ct)
     {
         var json = DapMessage.BuildEvent(NextSeq(), eventName, body);
-        _logger.LogDebug("→ event {Event}", eventName);
+        LogSendEvent(_logger, eventName);
         return _writer.WriteMessageAsync(json, ct);
     }
 
     private int NextSeq() => Interlocked.Increment(ref _seq);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "← {Type} {Command}")]
+    private static partial void LogReceived(ILogger logger, string type, string? command);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "→ response {Command} success={Success}")]
+    private static partial void LogSendResponse(ILogger logger, string command, bool success);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "→ event {Event}")]
+    private static partial void LogSendEvent(ILogger logger, string @event);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Session orchestration failed")]
+    private static partial void LogOrchestrationFailed(ILogger logger, Exception ex);
 }

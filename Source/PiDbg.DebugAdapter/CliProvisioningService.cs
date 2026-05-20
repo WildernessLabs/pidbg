@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Meadow.Daemon.Contracts.V1;
 using Microsoft.Extensions.Logging;
+using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 using PiDbg.Core;
 using PiDbg.Infrastructure;
 
@@ -11,7 +12,7 @@ namespace PiDbg.DebugAdapter;
 // Lightweight provisioning for the CLI/adapter context:
 // assumes the device was already provisioned via the VSIX.
 // Opens the gRPC channel and verifies the daemon responds.
-internal sealed class CliProvisioningService : IProvisioningService
+internal sealed partial class CliProvisioningService : IProvisioningService
 {
     private readonly IGrpcChannelFactory _channelFactory;
     private readonly ILogger<CliProvisioningService> _logger;
@@ -39,7 +40,7 @@ internal sealed class CliProvisioningService : IProvisioningService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to open gRPC channel");
+            LogGrpcChannelFailed(_logger, ex);
             return new ProvisioningOutcome
             {
                 Success = false,
@@ -60,7 +61,7 @@ internal sealed class CliProvisioningService : IProvisioningService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Daemon health check failed");
+            LogDaemonHealthFailed(_logger, ex);
             return new ProvisioningOutcome
             {
                 Success = false,
@@ -73,4 +74,10 @@ internal sealed class CliProvisioningService : IProvisioningService
         progress.Report("Daemon ready.");
         return new ProvisioningOutcome { Success = true, GrpcChannel = channel };
     }
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to open gRPC channel")]
+    private static partial void LogGrpcChannelFailed(ILogger logger, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Daemon health check failed")]
+    private static partial void LogDaemonHealthFailed(ILogger logger, Exception ex);
 }

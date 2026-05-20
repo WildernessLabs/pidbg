@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Text;
 using System.Threading;
@@ -6,9 +7,9 @@ using System.Threading.Tasks;
 namespace PiDbg.DebugAdapter.Dap;
 
 // Writes length-prefixed DAP messages to a stream.
-internal sealed class DapWriter
+internal sealed class DapWriter : IDisposable
 {
-    private readonly Stream _stream;
+    private readonly Stream      _stream;
     private readonly SemaphoreSlim _lock = new SemaphoreSlim(1, 1);
 
     public DapWriter(Stream stream) => _stream = stream;
@@ -21,8 +22,8 @@ internal sealed class DapWriter
         await _lock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            await _stream.WriteAsync(header, 0, header.Length, ct).ConfigureAwait(false);
-            await _stream.WriteAsync(body,   0, body.Length,   ct).ConfigureAwait(false);
+            await _stream.WriteAsync(header.AsMemory(), ct).ConfigureAwait(false);
+            await _stream.WriteAsync(body.AsMemory(),   ct).ConfigureAwait(false);
             await _stream.FlushAsync(ct).ConfigureAwait(false);
         }
         finally
@@ -30,4 +31,6 @@ internal sealed class DapWriter
             _lock.Release();
         }
     }
+
+    public void Dispose() => _lock.Dispose();
 }

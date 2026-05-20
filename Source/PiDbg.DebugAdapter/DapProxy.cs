@@ -10,7 +10,7 @@ namespace PiDbg.DebugAdapter;
 
 // After configurationDone, proxies DAP messages between VS Code (stdio) and vsdbg (TCP).
 // Intercepts disconnect/terminate to allow the adapter to run teardown before forwarding.
-internal sealed class DapProxy : IDisposable
+internal sealed partial class DapProxy : IDisposable
 {
     private readonly DapReader _fromVsCode;
     private readonly DapWriter _toVsCode;
@@ -39,9 +39,9 @@ internal sealed class DapProxy : IDisposable
         var tcp = new TcpClient();
         await tcp.ConnectAsync(host, port, ct).ConfigureAwait(false);
 
-        var netStream  = tcp.GetStream();
-        var fromVsdbg  = new DapReader(netStream);
-        var toVsdbg    = new DapWriter(netStream);
+        var netStream = tcp.GetStream();
+        var fromVsdbg = new DapReader(netStream);
+        var toVsdbg   = new DapWriter(netStream);
 
         return new DapProxy(fromVsCode, toVsCode, tcp, fromVsdbg, toVsdbg, logger);
     }
@@ -55,7 +55,6 @@ internal sealed class DapProxy : IDisposable
         var vsCodeToVsdbg = ForwardAsync(_fromVsCode, _toVsdbg, onDisconnect, linked);
         var vsdbgToVsCode = ForwardAsync(_fromVsdbg, _toVsCode, onTeardown: null, linked);
 
-        // Stop both directions when either completes
         await Task.WhenAny(vsCodeToVsdbg, vsdbgToVsCode).ConfigureAwait(false);
         linked.Cancel();
         await Task.WhenAll(vsCodeToVsdbg, vsdbgToVsCode).ConfigureAwait(false);
@@ -77,13 +76,12 @@ internal sealed class DapProxy : IDisposable
                 if (msg != null && onTeardown != null &&
                     (msg.Command == "disconnect" || msg.Command == "terminate"))
                 {
-                    _logger.LogInformation("DAP {Command} received — running teardown", msg.Command);
+                    LogTeardown(_logger, msg.Command);
                     try { await onTeardown().ConfigureAwait(false); } catch { /* best effort */ }
                 }
 
                 await sink.WriteMessageAsync(json, stopSource.Token).ConfigureAwait(false);
 
-                // After forwarding disconnect, stop the loop
                 if (msg?.Command == "disconnect" || msg?.Command == "terminate")
                     break;
             }
@@ -91,7 +89,7 @@ internal sealed class DapProxy : IDisposable
         catch (OperationCanceledException) { /* normal shutdown */ }
         catch (Exception ex) when (ex is IOException || ex is SocketException)
         {
-            _logger.LogDebug("Proxy channel closed: {Message}", ex.Message);
+            LogProxyChannelClosed(_logger, ex);
         }
         finally
         {
@@ -100,4 +98,10 @@ internal sealed class DapProxy : IDisposable
     }
 
     public void Dispose() => _tcp.Dispose();
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "DAP {Command} received — running teardown")]
+    private static partial void LogTeardown(ILogger logger, string command);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Proxy channel closed")]
+    private static partial void LogProxyChannelClosed(ILogger logger, Exception ex);
 }
