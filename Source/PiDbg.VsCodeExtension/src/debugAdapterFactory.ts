@@ -7,10 +7,16 @@ export class PiDbgDebugAdapterDescriptorFactory
 
     private readonly _context: vscode.ExtensionContext;
     private readonly _statusBar: PiDbgStatusBar;
+    private readonly _output: vscode.OutputChannel;
 
-    constructor(context: vscode.ExtensionContext, statusBar: PiDbgStatusBar) {
+    constructor(
+        context: vscode.ExtensionContext,
+        statusBar: PiDbgStatusBar,
+        output: vscode.OutputChannel
+    ) {
         this._context   = context;
         this._statusBar = statusBar;
+        this._output    = output;
     }
 
     createDebugAdapterDescriptor(
@@ -18,21 +24,19 @@ export class PiDbgDebugAdapterDescriptorFactory
         _executable: vscode.DebugAdapterExecutable | undefined
     ): vscode.ProviderResult<vscode.DebugAdapterDescriptor> {
 
-        // pidbg-adapter.exe lives next to the extension in bin/
         const adapterPath = path.join(
             this._context.extensionPath, 'bin', 'pidbg-adapter.exe');
 
-        this._statusBar.setConnecting(session.configuration['host'] as string);
+        const host = session.configuration['host'] as string;
+        this._statusBar.setConnecting(host);
+        this._output.appendLine(`[pidbg] connecting to ${host}…`);
+        this._output.appendLine(`[pidbg] adapter: ${adapterPath}`);
+        this._output.show(true); // reveal without stealing focus
 
-        vscode.debug.onDidTerminateDebugSession(s => {
-            if (s.id === session.id) {
-                this._statusBar.setDisconnected();
-            }
-        });
+        const env = Object.fromEntries(
+            Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined)
+        );
 
-        return new vscode.DebugAdapterExecutable(adapterPath, [], {
-            // Adapter logs go to stderr; VS Code surfaces them in the Debug Console
-            env: { ...process.env },
-        });
+        return new vscode.DebugAdapterExecutable(adapterPath, [], { env });
     }
 }

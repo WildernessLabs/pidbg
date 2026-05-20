@@ -3,13 +3,14 @@ using System.Threading;
 using System.Threading.Tasks;
 using Meadow.Daemon.Contracts.V1;
 using Microsoft.Extensions.Logging;
+using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 using PiDbg.Build;
 using PiDbg.Deploy;
 using PiDbg.Infrastructure;
 
 namespace PiDbg.Core;
 
-public sealed class SessionOrchestrator
+public sealed partial class SessionOrchestrator
 {
     private readonly ISshConnectionManager _ssh;
     private readonly IGrpcChannelFactory   _grpcChannels;
@@ -98,9 +99,7 @@ public sealed class SessionOrchestrator
         var absRoot    = session.ExpandPath(request.Connection.RootFolder);
         var appDllPath = $"{absRoot}/apps/{request.AppName}/debug/{request.AppName}.dll";
 
-        _logger.LogInformation(
-            "Debug session ready: local port {LocalPort}, PID {Pid}",
-            localPort, sessionResp.AppPid);
+        LogSessionReady(_logger, localPort, sessionResp.AppPid);
 
         return new DebugSessionInfo
         {
@@ -109,4 +108,8 @@ public sealed class SessionOrchestrator
             AppDllPath = appDllPath,
         };
     }
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "Debug session ready: local port {LocalPort}, PID {Pid}")]
+    private static partial void LogSessionReady(ILogger logger, int localPort, int pid);
 }

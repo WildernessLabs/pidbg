@@ -32,3 +32,4 @@ desktop.ini
 ## Logs
 *.log
 Source/VsExtension/Resources/meadow-daemon
+Source/PiDbg.VsCodeExtension/node_modules/

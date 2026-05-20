@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Grpc.Core;
 using Meadow.Daemon.Contracts.V1;
 using Microsoft.Extensions.Logging;
+using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 using PiDbg.Infrastructure;
 
 namespace PiDbg.Deploy;
@@ -21,7 +22,7 @@ public sealed record DeploymentProgress(string Phase, long BytesSent, long Total
     public int PercentComplete => TotalBytes == 0 ? 100 : (int)(BytesSent * 100 / TotalBytes);
 }
 
-public sealed class SftpDeploymentClient
+public sealed partial class SftpDeploymentClient
 {
     private readonly SshSession _session;
     private readonly Channel    _channel;
@@ -40,7 +41,7 @@ public sealed class SftpDeploymentClient
     {
         var client = new MeadowDaemonService.MeadowDaemonServiceClient(_channel);
 
-        _logger.LogInformation("Beginning deployment of {AppName}", appName);
+        LogBeginDeployment(_logger, appName);
 
         var beginResp = await client.BeginDeploymentAsync(new BeginDeploymentRequest
         {
@@ -56,9 +57,7 @@ public sealed class SftpDeploymentClient
         var filesToUpload = manifest.Files.Where(f => needed.Contains(f.Path)).ToList();
         var totalBytes    = filesToUpload.Sum(f => f.SizeBytes);
 
-        _logger.LogInformation(
-            "Uploading {UploadCount}/{TotalCount} files ({SkipCount} unchanged, {Kb} KB to transfer)",
-            filesToUpload.Count, manifest.Files.Count,
+        LogUploadPlan(_logger, filesToUpload.Count, manifest.Files.Count,
             manifest.Files.Count - filesToUpload.Count, totalBytes / 1024);
 
         try
@@ -80,7 +79,7 @@ public sealed class SftpDeploymentClient
                     $"Deployment verification failed for: {failures}. {commitResp.ErrorMessage}");
             }
 
-            _logger.LogInformation("Deployment committed successfully");
+            LogDeploymentCommitted(_logger);
         }
         catch (OperationCanceledException)
         {
@@ -101,6 +100,16 @@ public sealed class SftpDeploymentClient
             throw;
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Beginning deployment of {AppName}")]
+    private static partial void LogBeginDeployment(ILogger logger, string appName);
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "Uploading {UploadCount}/{TotalCount} files ({SkipCount} unchanged, {Kb} KB to transfer)")]
+    private static partial void LogUploadPlan(ILogger logger, int uploadCount, int totalCount, int skipCount, long kb);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Deployment committed successfully")]
+    private static partial void LogDeploymentCommitted(ILogger logger);
 
     private async Task UploadParallelAsync(
         List<FileEntry> files, string publishDir, string stagingDir,

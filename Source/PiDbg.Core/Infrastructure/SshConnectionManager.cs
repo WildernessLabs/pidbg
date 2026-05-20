@@ -11,7 +11,7 @@ using Renci.SshNet.Common;
 
 namespace PiDbg.Infrastructure;
 
-public sealed class SshConnectionManager : ISshConnectionManager, IDisposable
+public sealed partial class SshConnectionManager : ISshConnectionManager, IDisposable
 {
     private readonly ConcurrentDictionary<string, SshSession> _sessions =
         new ConcurrentDictionary<string, SshSession>(StringComparer.OrdinalIgnoreCase);
@@ -40,7 +40,7 @@ public sealed class SshConnectionManager : ISshConnectionManager, IDisposable
         var session  = await ConnectWithRetryAsync(connInfo, config.Host, ct).ConfigureAwait(false);
 
         _sessions[key] = session;
-        _logger.LogInformation("Connected to {Host}:{Port} as {User}", config.Host, config.Port, config.User);
+        LogConnected(_logger, config.Host, config.Port, config.User);
         return session;
     }
 
@@ -64,8 +64,7 @@ public sealed class SshConnectionManager : ISshConnectionManager, IDisposable
             catch (Exception ex) when (ex is SocketException || ex is SshException)
             {
                 last = ex;
-                _logger.LogWarning("SSH connect attempt {Attempt}/{Max} to {Host} failed: {Error}",
-                    attempt, maxAttempts, host, ex.Message);
+                LogConnectAttemptFailed(_logger, attempt, maxAttempts, host, ex.Message);
 
                 if (attempt < maxAttempts)
                     await Task.Delay(backoffMs, ct).ConfigureAwait(false);
@@ -86,7 +85,7 @@ public sealed class SshConnectionManager : ISshConnectionManager, IDisposable
             if (_sessions.TryRemove(key, out var session))
                 session.Dispose();
         }
-        _logger.LogInformation("Disconnected from {Host}", host);
+        LogDisconnected(_logger, host);
     }
 
     public SshSession? GetActiveSession(string host)
@@ -106,4 +105,13 @@ public sealed class SshConnectionManager : ISshConnectionManager, IDisposable
             session.Dispose();
         _sessions.Clear();
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Connected to {Host}:{Port} as {User}")]
+    private static partial void LogConnected(ILogger logger, string host, int port, string user);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "SSH connect attempt {Attempt}/{Max} to {Host} failed: {Error}")]
+    private static partial void LogConnectAttemptFailed(ILogger logger, int attempt, int max, string host, string error);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Disconnected from {Host}")]
+    private static partial void LogDisconnected(ILogger logger, string host);
 }

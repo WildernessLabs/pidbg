@@ -2,19 +2,40 @@
 
 ## 1. Extension Development Host (fastest feedback loop)
 
-Open `Source/PiDbg.VsCodeExtension/` in VS Code, then press **F5**. This spawns a second VS
-Code window ("Extension Development Host") with the extension loaded from source. Set
-breakpoints in TypeScript, add a `launch.json` with `"type": "pidbg"`, and press F5 in
-that second window to trigger a real debug session.
+### First-time setup
 
-Requires the adapter exe to already be built and sitting in `bin/`:
+```powershell
+cd Source/PiDbg.VsCodeExtension
+npm install
+```
+
+Build the adapter binary and place it where the extension expects it:
 
 ```powershell
 dotnet publish Source/PiDbg.DebugAdapter -r win-x64 --self-contained -o Source/PiDbg.VsCodeExtension/bin/
 ```
 
-TypeScript changes take effect after `npm run compile` + reload the host window
-(`Ctrl+Shift+P` → "Developer: Reload Window").
+### Launching
+
+Open the **repo root** in VS Code. Two launch configurations are available in the Run and
+Debug panel (F5 uses the first one):
+
+| Configuration | What it rebuilds | When to use |
+|---------------|-----------------|-------------|
+| **Run Extension** (default F5) | TypeScript only | Changed extension code |
+| **Run Extension (full rebuild)** | C# adapter + TypeScript | Changed adapter code |
+
+Both spawn a second "Extension Development Host" window with the extension loaded from source.
+In that window: open any .NET project, add a `launch.json` with `"type": "pidbg"`, and press
+F5 to trigger a real debug session. Set breakpoints in the TypeScript source in the first window
+to debug the extension itself.
+
+### Iterating
+
+| Change | Action |
+|--------|--------|
+| TypeScript | F5 with "Run Extension" — compiles automatically |
+| Adapter C# | F5 with "Run Extension (full rebuild)" — publishes then compiles |
 
 ---
 
@@ -98,17 +119,21 @@ These live in `PiDbg.DebugAdapter.Tests` alongside the C# unit tests.
 ## Recommended Dev Workflow
 
 ```
-1. Build adapter
-   dotnet publish src/PiDbg.DebugAdapter -r win-x64 --self-contained -o src/PiDbg.VsCodeExtension/bin/
+1. One-time setup
+   cd Source/PiDbg.VsCodeExtension && npm install
 
-2. Compile TypeScript
-   cd src/PiDbg.VsCodeExtension && npm run compile
+2. Open the repo root in VS Code
+   File → Open Folder → pidbg/
 
-3. Press F5 in VS Code (with PiDbg.VsCodeExtension open)
+3. Press F5 → "Run Extension"
+   → TypeScript compiles automatically
    → Extension Development Host launches
+
+   (or select "Run Extension (full rebuild)" to also publish the C# adapter)
 
 4. In the host window: open a test .NET project, add launch.json, press F5
 
-5. Iterate: after TypeScript changes → npm run compile → Ctrl+Shift+P "Reload Window"
-            after adapter changes   → dotnet publish → restart debug session
+5. Iterate:
+   TypeScript changes → F5 "Run Extension"
+   Adapter C# changes → F5 "Run Extension (full rebuild)"
 ```

@@ -102,7 +102,7 @@ internal sealed class DebugOnPiCommand
 
         // Step 3: Publish
         output.WriteLine(OutputPane.PiDbg, "Publishing...");
-        var publisher = new PublishService(output);
+        var publisher = new CliPublishRunner(new VsOutputWindowLogger<CliPublishRunner>(output));
         var publishResult = await publisher.PublishAsync(
             projectPath, appName,
             new Progress<string>(s => output.WriteLine(OutputPane.PiDbg, $"  {s}")),
@@ -113,7 +113,7 @@ internal sealed class DebugOnPiCommand
 
         // Step 4: Deploy
         output.WriteLine(OutputPane.PiDbg, "Deploying...");
-        var deployer = new SftpDeploymentClient(session, channel, output);
+        var deployer = new SftpDeploymentClient(session, channel, new VsOutputWindowLogger<SftpDeploymentClient>(output));
         await deployer.DeployAsync(
             appName, publishResult.PublishDir, publishResult.Manifest,
             new Progress<DeploymentProgress>(p =>

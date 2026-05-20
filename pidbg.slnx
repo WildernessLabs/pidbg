@@ -5,6 +5,7 @@
     <File Path="LICENSE" />
   </Folder>
   <Folder Name="/Source/">
+    <Project Path="Source/PiDbg.Core/PiDbg.Core.csproj" />
     <Project Path="Source\Meadow.Daemon.Contracts\Meadow.Daemon.Contracts.csproj" />
     <Project Path="Source\Meadow.Daemon\Meadow.Daemon.csproj" />
     <Project Path="Source\VsExtension\PiDbg.Vsix.csproj" />

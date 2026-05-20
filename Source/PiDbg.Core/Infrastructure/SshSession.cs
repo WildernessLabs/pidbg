@@ -97,7 +97,7 @@ public sealed class SshSession : IDisposable
     {
         var user = Ssh.ConnectionInfo.Username;
         if (path == "~")           return $"/home/{user}";
-        if (path.StartsWith("~/")) return $"/home/{user}/{path.Substring(2)}";
+        if (path.StartsWith("~/", StringComparison.Ordinal)) return $"/home/{user}/{path.Substring(2)}";
         return path;
     }
 
