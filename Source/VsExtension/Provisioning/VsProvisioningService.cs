@@ -3,10 +3,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using PiDbg.Core;
 using PiDbg.Infrastructure;
+using PiDbg.Provisioning;
 
 namespace PiDbg.Provisioning;
 
-// Adapts the VS-specific ProvisioningOrchestrator to the IDE-neutral IProvisioningService.
+// Adapts Core ProvisioningService for the VSIX context,
+// bridging IOutputWindowService to IProgress<string>.
 internal sealed class VsProvisioningService : IProvisioningService
 {
     private readonly IGrpcChannelFactory  _channelFactory;
@@ -14,25 +16,22 @@ internal sealed class VsProvisioningService : IProvisioningService
 
     public VsProvisioningService(IGrpcChannelFactory channelFactory, IOutputWindowService output)
     {
+        // Register the VSIX assembly so binary resources (daemon binary, vsdbg tarball)
+        // are resolved from the VSIX rather than PiDbg.Core.
+        ProvisioningResources.Register(typeof(VsProvisioningService).Assembly);
+
         _channelFactory = channelFactory;
         _output         = output;
     }
 
-    public async Task<ProvisioningOutcome> ProvisionAsync(
+    public Task<ProvisioningOutcome> ProvisionAsync(
         SshSession        session,
         string            rootFolder,
         IProgress<string> progress,
         CancellationToken ct)
     {
-        var result = await ProvisioningOrchestrator
-            .ProvisionAsync(session, _channelFactory, _output, rootFolder, ct)
-            .ConfigureAwait(false);
-
-        return new ProvisioningOutcome
-        {
-            Success     = result.Success,
-            Error       = result.Error,
-            GrpcChannel = result.Channel,
-        };
+        var bridged = new Progress<string>(msg => _output.WriteLine(OutputPane.PiDbg, msg));
+        var svc     = new ProvisioningService(_channelFactory);
+        return svc.ProvisionAsync(session, rootFolder, bridged, ct);
     }
 }

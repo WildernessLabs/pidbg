@@ -1,13 +1,10 @@
-using System;
-using System.IO;
-using System.Linq;
 using System.Net.Http;
-using System.Reflection;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
+
 using Grpc.Core;
+
 using Meadow.Daemon.Contracts.V1;
+
 using PiDbg.Infrastructure;
 
 namespace PiDbg.Provisioning;
@@ -15,7 +12,7 @@ namespace PiDbg.Provisioning;
 internal static class VsdbgInstallClient
 {
     public const string RequiredVsdbgMin = "17.0.0";
-    public const string PreferredVsdbg   = "latest";
+    public const string PreferredVsdbg = "latest";
 
     private const string GetVsDbgShUrl = "https://aka.ms/getvsdbgsh";
 
@@ -42,7 +39,7 @@ internal static class VsdbgInstallClient
         {
             var (succeeded, error) = await TryOnlineInstallAsync(client, progress, ct).ConfigureAwait(false);
             if (succeeded) return;
-            if (error != null) errors.AppendLine($"- Pi-side: {error}");
+            if (error != null) errors.Append("- Pi-side: ").AppendLine(error);
         }
 
         // 2. SSH script install — dev machine downloads GetVsDbg.sh, uploads and runs it on Pi.
@@ -50,7 +47,7 @@ internal static class VsdbgInstallClient
             var (succeeded, error) = await TrySshScriptInstallAsync(
                 session, rootFolder, progress, ct).ConfigureAwait(false);
             if (succeeded) return;
-            if (error != null) errors.AppendLine($"- VSIX-side: {error}");
+            if (error != null) errors.Append("- Extension-side: ").AppendLine(error);
         }
 
         // 3. Bundled offline tarball — for fully air-gapped scenarios
@@ -59,14 +56,13 @@ internal static class VsdbgInstallClient
         {
             var msg = new StringBuilder();
             msg.AppendLine("vsdbg installation failed across all methods:");
-            msg.Append(errors.ToString());
-            msg.AppendLine("- Offline: No bundled tarball found in VSIX.");
+            msg.Append(errors);
+            msg.AppendLine("- Offline: No bundled tarball found.");
             msg.AppendLine();
             msg.AppendLine("Common causes:");
             msg.AppendLine("1. Raspberry Pi has no internet (Pi-side failed).");
-            msg.AppendLine("2. Dev machine has no internet or aka.ms is blocked (VSIX-side failed).");
+            msg.AppendLine("2. Dev machine has no internet or aka.ms is blocked (extension-side failed).");
             msg.AppendLine("3. Firewall or proxy is blocking HTTPS traffic.");
-            
             throw new ProvisioningException(msg.ToString());
         }
 
@@ -122,9 +118,9 @@ internal static class VsdbgInstallClient
             using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
             var script = await http.GetStringAsync(GetVsDbgShUrl).ConfigureAwait(false);
 
-            var tmpDir    = $"{rootFolder}/tmp";
+            var tmpDir = $"{rootFolder}/tmp";
             var scriptPath = $"{tmpDir}/GetVsDbg.sh";
-            var vsdbgDir   = $"{rootFolder}/vsdbg";
+            var vsdbgDir = $"{rootFolder}/vsdbg";
 
             await session.ExecuteAsync($"mkdir -p '{tmpDir}'", ct).ConfigureAwait(false);
 
@@ -192,9 +188,9 @@ internal static class VsdbgInstallClient
         var response = await client.UploadVsdbgTarballAsync(
             new UploadVsdbgTarballRequest
             {
-                Version     = PreferredVsdbg,
+                Version = PreferredVsdbg,
                 TarballPath = remoteTarPath,
-                Sha256      = sha256,
+                Sha256 = sha256,
             },
             cancellationToken: ct).ConfigureAwait(false);
 
@@ -205,21 +201,22 @@ internal static class VsdbgInstallClient
         progress.Report("vsdbg installed successfully.");
     }
 
+    // Tarball lives in the entry-point assembly (VSIX / DebugAdapter).
     private static Stream? GetEmbeddedTarball()
     {
-        var asm  = Assembly.GetExecutingAssembly();
+        var asm = ProvisioningResources.Get();
         var name = asm.GetManifestResourceNames()
-            .FirstOrDefault(n => n.IndexOf("vsdbg-linux-arm64.tar.gz",
-                StringComparison.OrdinalIgnoreCase) >= 0);
+            .FirstOrDefault(n => n.Contains("vsdbg-linux-arm64.tar.gz",
+                StringComparison.OrdinalIgnoreCase));
         return name is null ? null : asm.GetManifestResourceStream(name);
     }
 
     private static string GetEmbeddedTarballSha256()
     {
-        var asm  = Assembly.GetExecutingAssembly();
+        var asm = ProvisioningResources.Get();
         var name = asm.GetManifestResourceNames()
-            .FirstOrDefault(n => n.IndexOf("vsdbg-linux-arm64.tar.gz.sha256",
-                StringComparison.OrdinalIgnoreCase) >= 0);
+            .FirstOrDefault(n => n.Contains("vsdbg-linux-arm64.tar.gz.sha256",
+                StringComparison.OrdinalIgnoreCase));
         if (name is null) return "";
         using var stream = asm.GetManifestResourceStream(name)!;
         using var reader = new System.IO.StreamReader(stream);

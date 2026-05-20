@@ -15,6 +15,19 @@
     <PackageReference Include="Grpc.Core" />
     <PackageReference Include="Google.Protobuf" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <!-- System.Text.Json is in-box for net9.0; the package backfills net472 via netstandard2.0 -->
+    <PackageReference Include="System.Text.Json" Condition="'$(TargetFramework)' == 'net472'" />
+  </ItemGroup>
+
+  <!-- System.Net.Http is not auto-referenced in SDK-style projects targeting net472 -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net472'">
+    <Reference Include="System.Net.Http" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Provisioning\Resources\detect.sh" />
+    <EmbeddedResource Include="Provisioning\Resources\meadow-daemon.service.template" />
+    <EmbeddedResource Include="Provisioning\Resources\version-manifest.json" />
   </ItemGroup>
 
 </Project>

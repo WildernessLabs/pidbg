@@ -1,11 +1,11 @@
+using System;
 using System.IO;
-using System.Reflection;
+using System.Linq;
 using System.Text;
-
+using System.Threading;
+using System.Threading.Tasks;
 using Grpc.Core;
-
 using Meadow.Daemon.Contracts.V1;
-
 using PiDbg.Infrastructure;
 
 namespace PiDbg.Provisioning;
@@ -14,10 +14,8 @@ public enum DaemonInstallAction { None, Install, Upgrade, Reinstall }
 
 internal static class DaemonInstaller
 {
-    // Populated at VSIX build time by a T4 or source generator stamping the bundled binary.
-    // Placeholder values are safe: without RequiredSha256, the SHA check is skipped.
     public const string RequiredVersion = "1.0.19";
-    public const string RequiredSha256 = "";
+    public const string RequiredSha256  = "";
 
     public static DaemonInstallAction DetermineAction(DetectionResult detection)
     {
@@ -50,15 +48,13 @@ internal static class DaemonInstaller
         var binaryStream = GetEmbeddedBinary();
         if (binaryStream is null)
             throw new ProvisioningException(
-                "Daemon binary not bundled in this VSIX. " +
-                "Please install the official release of the PiDbg extension.");
+                "Daemon binary not bundled. " +
+                "Please provision the device via the PiDbg Visual Studio extension first.");
 
-        // Expand ~ to absolute path — systemd and single-quoted SSH args don't expand it.
-        var absRoot = session.ExpandPath(rootFolder);
-        var binDir = $"{absRoot}/bin";
+        var absRoot  = session.ExpandPath(rootFolder);
+        var binDir   = $"{absRoot}/bin";
         var daemonBin = $"{binDir}/meadow-daemon";
 
-        // Ensure bin directory exists
         await session.ExecuteAsync($"mkdir -p '{binDir}'", ct).ConfigureAwait(false);
 
         if (action == DaemonInstallAction.Upgrade)
@@ -140,7 +136,7 @@ internal static class DaemonInstaller
     public static async Task<bool> WaitForHealthAsync(
         Channel channel, TimeSpan timeout, CancellationToken ct)
     {
-        var client = new MeadowDaemonService.MeadowDaemonServiceClient(channel);
+        var client   = new MeadowDaemonService.MeadowDaemonServiceClient(channel);
         var deadline = DateTimeOffset.UtcNow + timeout;
 
         while (DateTimeOffset.UtcNow < deadline)
@@ -152,10 +148,7 @@ internal static class DaemonInstaller
                              .ConfigureAwait(false);
                 return true;
             }
-            catch (Exception)
-            {
-                /* daemon not ready yet or tunnel not established */
-            }
+            catch (Exception) { /* daemon not ready yet */ }
             await Task.Delay(2000, ct).ConfigureAwait(false);
         }
         return false;
@@ -173,9 +166,21 @@ internal static class DaemonInstaller
             .Replace("\r", "\n");
     }
 
+    // Text resources live in PiDbg.Core itself.
+    private static string LoadEmbeddedText(string resourceSuffix)
+    {
+        var asm  = typeof(DaemonInstaller).Assembly;
+        var name = asm.GetManifestResourceNames()
+            .First(n => n.EndsWith(resourceSuffix, StringComparison.OrdinalIgnoreCase));
+        using var stream = asm.GetManifestResourceStream(name)!;
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        return reader.ReadToEnd();
+    }
+
+    // Binary resources (meadow-daemon binary) are registered by the entry-point assembly.
     private static Stream? GetEmbeddedBinary()
     {
-        var asm = Assembly.GetExecutingAssembly();
+        var asm  = ProvisioningResources.Get();
         var name = asm.GetManifestResourceNames()
             .FirstOrDefault(n => n.EndsWith("meadow-daemon", StringComparison.Ordinal));
         return name is null ? null : asm.GetManifestResourceStream(name);
@@ -183,22 +188,12 @@ internal static class DaemonInstaller
 
     private static long GetBinarySize()
     {
-        var asm = Assembly.GetExecutingAssembly();
+        var asm  = ProvisioningResources.Get();
         var name = asm.GetManifestResourceNames()
             .FirstOrDefault(n => n.EndsWith("meadow-daemon", StringComparison.Ordinal));
         if (name is null) return 0;
         using var stream = asm.GetManifestResourceStream(name)!;
         return stream.Length;
-    }
-
-    private static string LoadEmbeddedText(string resourceSuffix)
-    {
-        var asm = Assembly.GetExecutingAssembly();
-        var name = asm.GetManifestResourceNames()
-            .First(n => n.EndsWith(resourceSuffix, StringComparison.OrdinalIgnoreCase));
-        using var stream = asm.GetManifestResourceStream(name)!;
-        using var reader = new StreamReader(stream, Encoding.UTF8);
-        return reader.ReadToEnd();
     }
 
     private static async Task UploadTextAsync(
@@ -212,9 +207,8 @@ internal static class DaemonInstaller
     private static bool IsVersionLessThan(string installed, string required)
     {
         if (string.IsNullOrEmpty(installed) || string.IsNullOrEmpty(required)) return false;
-        // Strip +commithash suffix appended by .NET SDK to AssemblyInformationalVersion.
         var cleanInstalled = installed.Split('+')[0].Trim();
-        var cleanRequired = required.Split('+')[0].Trim();
+        var cleanRequired  = required.Split('+')[0].Trim();
         if (Version.TryParse(cleanInstalled, out var v1) && Version.TryParse(cleanRequired, out var v2))
             return v1 < v2;
         return string.Compare(cleanInstalled, cleanRequired, StringComparison.OrdinalIgnoreCase) < 0;

@@ -1,0 +1,23 @@
+[Unit]
+Description=Meadow Daemon (PiDbg remote debug agent)
+Documentation=https://github.com/WildernessLabs/PiDbg
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=@@DAEMON_BIN@@
+Environment=PATH=@@DOTNET_ROOT@@:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=DOTNET_ROOT=@@DOTNET_ROOT@@
+Environment=MEADOW_DAEMON__INSTALLROOT=@@INSTALL_DIR@@
+Environment=MEADOW_DAEMON__APPROOT=@@INSTALL_DIR@@/apps
+Environment=MEADOW_DAEMON__VSDBGROOT=@@INSTALL_DIR@@/vsdbg
+Environment=MEADOW_DAEMON__STATEROOT=@@INSTALL_DIR@@/state
+Environment=MEADOW_DAEMON__LOGROOT=@@INSTALL_DIR@@/logs
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=meadow-daemon
+
+[Install]
+WantedBy=default.target

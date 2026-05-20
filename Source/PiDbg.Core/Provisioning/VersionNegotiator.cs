@@ -30,11 +30,11 @@ internal static class VersionNegotiator
         if (protoVer < Manifest.MinProtoVersion)
             return new NegotiationResult(false, protoVer, false,
                 $"Daemon proto version {protoVer} is too old. " +
-                $"This VSIX requires proto version {Manifest.MinProtoVersion}+. " +
+                $"This extension requires proto version {Manifest.MinProtoVersion}+. " +
                 "Update the daemon via PiDbg: Repair Connection.");
 
-        var daemonVer      = pong.Version?.Version ?? "";
-        var upgradeNeeded  = IsVersionLessThan(daemonVer, Manifest.PreferredDaemon);
+        var daemonVer     = pong.Version?.Version ?? "";
+        var upgradeNeeded = IsVersionLessThan(daemonVer, Manifest.PreferredDaemon);
 
         return new NegotiationResult(true, protoVer, upgradeNeeded, null);
     }

@@ -1,3 +1,6 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 using PiDbg.Infrastructure;
 
 namespace PiDbg.Provisioning;
@@ -21,7 +24,6 @@ internal static class DotnetInstaller
             throw new ProvisioningException(
                 $".NET install script failed (exit {rc}):\n{stdout.Trim()}");
 
-        // Persist PATH/DOTNET_ROOT in ~/.bashrc so interactive sessions work too.
         progress.Report("Updating ~/.bashrc with DOTNET_ROOT...");
         var bashrcCmd =
             "grep -qF 'DOTNET_ROOT' ~/.bashrc || " +

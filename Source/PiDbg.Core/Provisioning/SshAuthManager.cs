@@ -1,11 +1,13 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Security.AccessControl;
-using System.Security.Principal;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+#if NET472
+using System.Security.AccessControl;
+using System.Security.Principal;
+#endif
 using PiDbg.Infrastructure;
 
 namespace PiDbg.Provisioning;
@@ -19,12 +21,12 @@ internal sealed class SshKeyPair
 internal static class SshAuthManager
 {
     private static readonly string KeyDir =
-        Path.Combine(
+        System.IO.Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "PiDbg", "ssh");
 
     private static readonly string ProfilesDir =
-        Path.Combine(
+        System.IO.Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "PiDbg");
 
@@ -34,8 +36,8 @@ internal static class SshAuthManager
     public static async Task<SshKeyPair> EnsureKeyPairAsync(CancellationToken ct)
     {
         Directory.CreateDirectory(KeyDir);
-        var privPath = Path.Combine(KeyDir, "id_pidbg");
-        var pubPath  = Path.Combine(KeyDir, "id_pidbg.pub");
+        var privPath = System.IO.Path.Combine(KeyDir, "id_pidbg");
+        var pubPath  = System.IO.Path.Combine(KeyDir, "id_pidbg.pub");
 
         if (File.Exists(privPath) && File.Exists(pubPath))
             return new SshKeyPair
@@ -52,18 +54,15 @@ internal static class SshAuthManager
         };
     }
 
-    // Legacy stub compatibility
     public static Task<SshKeyPair> GenerateKeyPairAsync(CancellationToken ct)
         => EnsureKeyPairAsync(ct);
 
     public static async Task InstallPublicKeyAsync(
         SshSession session, SshKeyPair keyPair, CancellationToken ct)
     {
-        // Check whether the key fingerprint is already present
-        // Compare on the key blob only (second space-delimited field) for robustness
-        var keyBlob   = keyPair.PublicKey.Split(' ').Length >= 2
+        var keyBlob  = keyPair.PublicKey.Split(' ').Length >= 2
             ? keyPair.PublicKey.Split(' ')[1] : keyPair.PublicKey;
-        var checkCmd  = $"grep -qF '{keyBlob}' ~/.ssh/authorized_keys 2>/dev/null && echo YES || echo NO";
+        var checkCmd = $"grep -qF '{keyBlob}' ~/.ssh/authorized_keys 2>/dev/null && echo YES || echo NO";
         var (_, stdout, _) = await session.ExecuteAsync(checkCmd, ct).ConfigureAwait(false);
 
         if (stdout.Trim() == "YES") return;
@@ -79,14 +78,13 @@ internal static class SshAuthManager
             throw new ProvisioningException($"Failed to install SSH key: {err}");
     }
 
-    // Legacy stub compatibility
     public static Task InstallPublicKeyAsync(string publicKey, CancellationToken ct)
         => Task.CompletedTask;
 
     public static SshConnectionConfig? LoadStoredConfig(string host)
     {
         Directory.CreateDirectory(ProfilesDir);
-        var path = Path.Combine(ProfilesDir, $"profile_{SanitizeHost(host)}.json");
+        var path = System.IO.Path.Combine(ProfilesDir, $"profile_{SanitizeHost(host)}.json");
         if (!File.Exists(path)) return null;
         try
         {
@@ -99,7 +97,7 @@ internal static class SshAuthManager
     public static void SaveConfig(string host, SshConnectionConfig config)
     {
         Directory.CreateDirectory(ProfilesDir);
-        var path = Path.Combine(ProfilesDir, $"profile_{SanitizeHost(host)}.json");
+        var path = System.IO.Path.Combine(ProfilesDir, $"profile_{SanitizeHost(host)}.json");
         var json = JsonSerializer.Serialize(config, JsonWriteOpts);
         File.WriteAllText(path, json);
     }
@@ -108,7 +106,7 @@ internal static class SshAuthManager
         SshSession session, CancellationToken ct)
     {
         Directory.CreateDirectory(KeyDir);
-        var knownHostsPath = Path.Combine(KeyDir, "known_hosts");
+        var knownHostsPath = System.IO.Path.Combine(KeyDir, "known_hosts");
 
         var (_, stdout, _) = await session.ExecuteAsync(
             $"ssh-keyscan -H -t ed25519 {session.Host} 2>/dev/null | head -1", ct)
@@ -123,7 +121,6 @@ internal static class SshAuthManager
         }
     }
 
-    // Legacy stub compatibility
     public static Task UpdateKnownHostsAsync(string host, int port, CancellationToken ct)
         => Task.CompletedTask;
 
@@ -172,6 +169,7 @@ internal static class SshAuthManager
 
     private static void RestrictFileToCurrentUser(string path)
     {
+#if NET472
         try
         {
             var fi       = new FileInfo(path);
@@ -184,18 +182,19 @@ internal static class SshAuthManager
             fi.SetAccessControl(security);
         }
         catch { /* best-effort — non-critical */ }
+#endif
     }
 
     private static string? FindSshKeygen()
     {
         var system32 = Environment.GetFolderPath(Environment.SpecialFolder.System);
-        var builtin  = Path.Combine(system32, "OpenSSH", "ssh-keygen.exe");
+        var builtin  = System.IO.Path.Combine(system32, "OpenSSH", "ssh-keygen.exe");
         if (File.Exists(builtin)) return builtin;
 
         foreach (var dir in (Environment.GetEnvironmentVariable("PATH") ?? "")
-                            .Split(Path.PathSeparator))
+                            .Split(System.IO.Path.PathSeparator))
         {
-            var candidate = Path.Combine(dir.Trim(), "ssh-keygen.exe");
+            var candidate = System.IO.Path.Combine(dir.Trim(), "ssh-keygen.exe");
             if (File.Exists(candidate)) return candidate;
         }
         return null;

@@ -8,9 +8,13 @@ using PiDbg.Core;
 using PiDbg.DebugAdapter;
 using PiDbg.DebugAdapter.Dap;
 using PiDbg.Infrastructure;
+using PiDbg.Provisioning;
 
 // Redirect Console.Out to stderr so DAP messages on stdout are not polluted.
 Console.SetOut(Console.Error);
+
+// Register this assembly as the source for binary embedded resources (daemon binary, vsdbg tarball).
+ProvisioningResources.Register(System.Reflection.Assembly.GetExecutingAssembly());
 
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };

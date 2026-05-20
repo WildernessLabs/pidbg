@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -20,9 +19,6 @@ internal static class CapabilityDetector
     public static async Task<DetectionResult> DetectAsync(
         SshSession session, string rootFolder, CancellationToken ct)
     {
-        // Prepend ROOT_FOLDER assignment so the script can use it.
-        // Single-quote the heredoc delimiter so bash won't expand $ in script body;
-        // the variable is set as a separate statement before the heredoc.
         var escaped = rootFolder.Replace("'", "'\\''");
         var heredoc = $"ROOT_FOLDER='{escaped}' bash -s <<'DETECT_SCRIPT'\n{DetectScript}\nDETECT_SCRIPT";
         var (_, stdout, stderr) = await session.ExecuteAsync(heredoc, ct).ConfigureAwait(false);
@@ -32,7 +28,6 @@ internal static class CapabilityDetector
                 "Capability detection returned no output. " +
                 $"Stderr: {Truncate(stderr, 300)}");
 
-        // Strip SSH login banners by finding the first '{' on stdout
         var jsonStart = stdout.IndexOf('{');
         if (jsonStart < 0)
             throw new ProvisioningException(
@@ -55,11 +50,11 @@ internal static class CapabilityDetector
 
     private static string LoadEmbeddedScript()
     {
-        var asm  = Assembly.GetExecutingAssembly();
+        var asm  = typeof(CapabilityDetector).Assembly;
         var name = asm.GetManifestResourceNames()
             .FirstOrDefault(n => n.EndsWith("detect.sh", StringComparison.OrdinalIgnoreCase))
             ?? throw new InvalidOperationException(
-                "detect.sh not found as an embedded resource in the VSIX assembly.");
+                "detect.sh not found as an embedded resource in PiDbg.Core.");
         using var stream = asm.GetManifestResourceStream(name)!;
         using var reader = new StreamReader(stream, Encoding.UTF8);
         return reader.ReadToEnd();

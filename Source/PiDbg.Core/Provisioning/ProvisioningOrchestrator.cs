@@ -1,15 +1,12 @@
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
+
 using Grpc.Core;
+
 using PiDbg.Infrastructure;
 
 namespace PiDbg.Provisioning;
 
-internal static class ProvisioningOrchestrator
+public static class ProvisioningOrchestrator
 {
     private static readonly ConcurrentDictionary<string, CachedProvisioning> _cache =
         new ConcurrentDictionary<string, CachedProvisioning>(StringComparer.OrdinalIgnoreCase);
@@ -18,28 +15,27 @@ internal static class ProvisioningOrchestrator
 
     private sealed class CachedProvisioning
     {
-        public string        DaemonVersion { get; set; } = "";
-        public string        VsdbgVersion  { get; set; } = "";
-        public DateTimeOffset At           { get; set; }
+        public string DaemonVersion { get; set; } = "";
+        public string VsdbgVersion { get; set; } = "";
+        public DateTimeOffset At { get; set; }
     }
 
     public static async Task<ProvisioningResult> ProvisionAsync(
         SshSession session,
         IGrpcChannelFactory channelFactory,
-        IOutputWindowService output,
+        IProgress<string> progress,
         string rootFolder,
         CancellationToken ct)
     {
         var steps = new List<ProvisioningStep>();
 
         // --- Step 1: Capability Detection ---
-        output.WriteLine(OutputPane.PiDbg, "[1/7] Detecting device capabilities...");
+        progress.Report("[1/7] Detecting device capabilities...");
         DetectionResult detection;
         try
         {
             detection = await CapabilityDetector.DetectAsync(session, rootFolder, ct).ConfigureAwait(false);
-            output.WriteLine(OutputPane.PiDbg,
-                $"  Host: {detection.Host.OsPretty} ({detection.Host.Arch})");
+            progress.Report($"  Host: {detection.Host.OsPretty} ({detection.Host.Arch})");
             steps.Add(MakeStep("Detection", true,
                 $"Host: {detection.Host.OsPretty} ({detection.Host.Arch})"));
         }
@@ -49,10 +45,10 @@ internal static class ProvisioningOrchestrator
         }
 
         // --- Step 2: Platform Validation ---
-        output.WriteLine(OutputPane.PiDbg, "[2/7] Validating platform...");
+        progress.Report("[2/7] Validating platform...");
         var report = PlatformValidator.Validate(detection, rootFolder);
         foreach (var item in report.Items)
-            output.WriteLine(OutputPane.PiDbg,
+            progress.Report(
                 $"  [{(item.Passed ? "OK" : item.IsFatal ? "FAIL" : "WARN")}] " +
                 $"{item.Check}: {item.Message}");
 
@@ -65,19 +61,16 @@ internal static class ProvisioningOrchestrator
             $"{report.Warnings.Count} warning(s)"));
 
         // --- Step 3: .NET runtime ---
-        output.WriteLine(OutputPane.PiDbg, "[3/8] Checking .NET runtime...");
+        progress.Report("[3/7] Checking .NET runtime...");
         var dotnetRoot = detection.Runtime.DotnetRoot;
-        var dotnetWasInstalled = false;
         if (string.IsNullOrEmpty(detection.Runtime.DotnetVersion))
         {
-            output.WriteLine(OutputPane.PiDbg, "  .NET not found — installing...");
-            var dotnetProg = new Progress<string>(
-                msg => output.WriteLine(OutputPane.PiDbg, $"  {msg}"));
+            progress.Report("  .NET not found — installing...");
+            var dotnetProg = new Progress<string>(msg => progress.Report($"  {msg}"));
             try
             {
                 await DotnetInstaller.InstallAsync(session, dotnetProg, ct).ConfigureAwait(false);
                 dotnetRoot = session.ExpandPath("~/.dotnet");
-                dotnetWasInstalled = true;
                 steps.Add(MakeStep(".NET install", true, "installed"));
             }
             catch (ProvisioningException ex)
@@ -87,26 +80,21 @@ internal static class ProvisioningOrchestrator
         }
         else
         {
-            output.WriteLine(OutputPane.PiDbg,
-                $"  .NET {detection.Runtime.DotnetVersion} found at {dotnetRoot}");
+            progress.Report($"  .NET {detection.Runtime.DotnetVersion} found at {dotnetRoot}");
             steps.Add(MakeStep(".NET runtime", true, detection.Runtime.DotnetVersion, skipped: true));
         }
 
-        // --- Step 4: Daemon install ---
-        output.WriteLine(OutputPane.PiDbg, "[4/8] Checking daemon...");
+        // --- Step 4: Daemon install/sync ---
+        progress.Report("[4/7] Checking daemon...");
         var action = DaemonInstaller.DetermineAction(detection);
 
         if (action == DaemonInstallAction.None)
         {
-            output.WriteLine(OutputPane.PiDbg,
-                $"  Daemon {detection.Daemon.BinaryVersion} is current");
+            progress.Report($"  Daemon {detection.Daemon.BinaryVersion} is current");
 
-            // Always sync the service file so PATH/DOTNET_ROOT stays current even
-            // when the binary didn't change (e.g. dotnet moved to ~/.dotnet).
             if (!string.IsNullOrEmpty(dotnetRoot))
             {
-                var svcProg = new Progress<string>(
-                    msg => output.WriteLine(OutputPane.PiDbg, $"  {msg}"));
+                var svcProg = new Progress<string>(msg => progress.Report($"  {msg}"));
                 try
                 {
                     await DaemonInstaller.UpdateServiceAsync(
@@ -125,12 +113,12 @@ internal static class ProvisioningOrchestrator
         }
         else
         {
-            output.WriteLine(OutputPane.PiDbg, $"  Action required: {action}");
-            var prog = new Progress<string>(
-                msg => output.WriteLine(OutputPane.PiDbg, $"  {msg}"));
+            progress.Report($"  Action required: {action}");
+            var daemonProg = new Progress<string>(msg => progress.Report($"  {msg}"));
             try
             {
-                await DaemonInstaller.InstallAsync(session, action, rootFolder, dotnetRoot, prog, ct).ConfigureAwait(false);
+                await DaemonInstaller.InstallAsync(
+                    session, action, rootFolder, dotnetRoot, daemonProg, ct).ConfigureAwait(false);
                 steps.Add(MakeStep("Daemon install", true, action.ToString()));
             }
             catch (ProvisioningException ex)
@@ -139,8 +127,8 @@ internal static class ProvisioningOrchestrator
             }
         }
 
-        // --- Step 4: Open gRPC channel ---
-        output.WriteLine(OutputPane.PiDbg, "[4/7] Connecting to daemon...");
+        // --- Step 5: Open gRPC channel ---
+        progress.Report("[5/7] Connecting to daemon...");
         Channel channel;
         try
         {
@@ -152,11 +140,11 @@ internal static class ProvisioningOrchestrator
         }
         steps.Add(MakeStep("gRPC channel", true, "connected"));
 
-        // --- Step 5: Health check ---
-        output.WriteLine(OutputPane.PiDbg, "[5/7] Waiting for daemon health...");
+        // --- Step 6: Health check ---
+        progress.Report("[6/7] Waiting for daemon health...");
         var startupTimeout = action == DaemonInstallAction.None
-            ? TimeSpan.FromSeconds(10)   // already running — should be immediate
-            : TimeSpan.FromSeconds(60);  // fresh install: first-run .NET extraction can be slow
+            ? TimeSpan.FromSeconds(10)
+            : TimeSpan.FromSeconds(60);
         var healthy = await DaemonInstaller.WaitForHealthAsync(
             channel, startupTimeout, ct).ConfigureAwait(false);
         if (!healthy)
@@ -164,35 +152,32 @@ internal static class ProvisioningOrchestrator
             var (_, status, _) = await session.ExecuteAsync(
                 "systemctl --user status meadow-daemon --no-pager -l 2>&1 | tail -30",
                 ct).ConfigureAwait(false);
-            output.WriteLine(OutputPane.PiDbg, $"Daemon status:\n{status}");
+            progress.Report($"Daemon status:\n{status}");
             return Fail(steps, "Daemon health",
                 $"Daemon did not become healthy within {startupTimeout.TotalSeconds} seconds.\n{status}");
         }
         steps.Add(MakeStep("Daemon health", true, "OK"));
 
-        // --- Step 6: Version negotiation ---
-        output.WriteLine(OutputPane.PiDbg, "[6/7] Negotiating protocol version...");
+        // --- Step 7: Version negotiation ---
+        progress.Report("[7/7] Negotiating protocol version...");
         var nego = await VersionNegotiator.NegotiateAsync(channel, ct).ConfigureAwait(false);
         if (!nego.Compatible)
             return Fail(steps, "Version negotiation", nego.Error ?? "Protocol incompatible");
 
         if (nego.UpgradeRecommended)
-            output.WriteWarning(OutputPane.PiDbg,
-                "  Daemon upgrade recommended. Run PiDbg: Repair Connection to update.");
+            progress.Report("  WARN: Daemon upgrade recommended. Run PiDbg: Repair Connection to update.");
 
         steps.Add(MakeStep("Version negotiation", true, $"proto v{nego.ProtoVersion}"));
 
-        // --- Step 7: vsdbg ---
-        output.WriteLine(OutputPane.PiDbg, "[7/7] Checking vsdbg...");
+        // --- Step 8: vsdbg ---
+        progress.Report("[8/8] Checking vsdbg...");
         if (VsdbgInstallClient.NeedsInstall(detection))
         {
-            var vsdbgProg = new Progress<string>(
-                msg => output.WriteLine(OutputPane.PiDbg, $"  {msg}"));
+            var vsdbgProg = new Progress<string>(msg => progress.Report($"  {msg}"));
             try
             {
                 await VsdbgInstallClient.InstallAsync(
-                    session, channel, rootFolder, vsdbgProg, ct)
-                    .ConfigureAwait(false);
+                    session, channel, rootFolder, vsdbgProg, ct).ConfigureAwait(false);
                 steps.Add(MakeStep("vsdbg install", true, "installed"));
             }
             catch (ProvisioningException ex)
@@ -202,22 +187,19 @@ internal static class ProvisioningOrchestrator
         }
         else
         {
-            output.WriteLine(OutputPane.PiDbg,
-                $"  vsdbg {detection.Vsdbg.Version} is current");
+            progress.Report($"  vsdbg {detection.Vsdbg.Version} is current");
             steps.Add(MakeStep("vsdbg", true, "up to date", skipped: true));
         }
 
-        // Cache result to skip no-op provisioning on subsequent F5
         _cache[session.Host] = new CachedProvisioning
         {
             DaemonVersion = detection.Daemon.BinaryVersion,
-            VsdbgVersion  = detection.Vsdbg.Version,
-            At            = DateTimeOffset.UtcNow,
+            VsdbgVersion = detection.Vsdbg.Version,
+            At = DateTimeOffset.UtcNow,
         };
 
         var executedCount = steps.Count(s => !s.Skipped);
-        output.WriteLine(OutputPane.PiDbg,
-            $"Provisioning complete ({executedCount} step(s) executed).");
+        progress.Report($"Provisioning complete ({executedCount} step(s) executed).");
 
         return new ProvisioningResult { Success = true, Steps = steps, Channel = channel };
     }
@@ -225,7 +207,7 @@ internal static class ProvisioningOrchestrator
     public static bool IsCacheValid(string host, string daemonVersion, string vsdbgVersion)
     {
         if (!_cache.TryGetValue(host, out var cached)) return false;
-        if (DateTimeOffset.UtcNow - cached.At > CacheMaxAge)    return false;
+        if (DateTimeOffset.UtcNow - cached.At > CacheMaxAge) return false;
         if (cached.DaemonVersion != daemonVersion) return false;
         return true;
     }
@@ -243,7 +225,7 @@ internal static class ProvisioningOrchestrator
         string name, bool success, string message, bool skipped = false)
         => new ProvisioningStep
         {
-            Name    = name,
+            Name = name,
             Success = success,
             Message = message,
             Skipped = skipped,

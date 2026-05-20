@@ -90,8 +90,9 @@ internal sealed class DebugOnPiCommand
 
         // Step 2: Provision (idempotent)
         output.WriteLine(OutputPane.PiDbg, "Provisioning...");
+        var provisionProgress = new Progress<string>(msg => output.WriteLine(OutputPane.PiDbg, msg));
         var provision = await ProvisioningOrchestrator
-            .ProvisionAsync(session, PiDbgPackage.GrpcChannels, output, config.RootFolder, ct)
+            .ProvisionAsync(session, PiDbgPackage.GrpcChannels, provisionProgress, config.RootFolder, ct)
             .ConfigureAwait(false);
 
         if (!provision.Success)
