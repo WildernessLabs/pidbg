@@ -33,3 +33,4 @@ desktop.ini
 *.log
 Source/VsExtension/Resources/meadow-daemon
 Source/PiDbg.VsCodeExtension/node_modules/
+Source/PiDbg.DebugAdapter/Resources/meadow-daemon
