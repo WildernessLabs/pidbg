@@ -4,6 +4,11 @@
   "description": "Debug .NET 10 applications on Raspberry Pi ARM64 from VS Code",
   "version": "0.1.0",
   "publisher": "wildernessLabs",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/WildernessLabs/pidbg.git"
+  },
   "engines": { "vscode": "^1.90.0" },
   "categories": ["Debuggers"],
   "activationEvents": ["onDebug"],

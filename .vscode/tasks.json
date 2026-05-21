@@ -39,12 +39,12 @@
     {
       "label": "PiDbg: Build Adapter Debug",
       "type": "shell",
-      "command": "dotnet build -p:Configuration=Debug ${workspaceFolder}/Source/PiDbg.DebugAdapter/PiDbg.DebugAdapter.csproj"
+      "command": "dotnet build --configfile ${workspaceFolder}/.vscode/NuGet.Debug.config -p:Configuration=Debug -p:TreatWarningsAsErrors=false ${workspaceFolder}/Source/PiDbg.DebugAdapter/PiDbg.DebugAdapter.csproj"
     },
     {
       "label": "PiDbg: Build Adapter Release",
       "type": "shell",
-      "command": "dotnet build -p:Configuration=Release ${workspaceFolder}/Source/PiDbg.DebugAdapter/PiDbg.DebugAdapter.csproj"
+      "command": "dotnet build --configfile ${workspaceFolder}/.vscode/NuGet.Debug.config -p:Configuration=Release -p:TreatWarningsAsErrors=false ${workspaceFolder}/Source/PiDbg.DebugAdapter/PiDbg.DebugAdapter.csproj"
     },
     {
       "label": "PiDbg: Publish Adapter To Extension Bin",

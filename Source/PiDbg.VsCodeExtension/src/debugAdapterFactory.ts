@@ -3,6 +3,18 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { PiDbgStatusBar } from './statusBar';
 
+function getExecutableEnvironment(): { [key: string]: string } {
+    const env: { [key: string]: string } = {};
+
+    for (const [key, value] of Object.entries(process.env)) {
+        if (value !== undefined) {
+            env[key] = value;
+        }
+    }
+
+    return env;
+}
+
 export class PiDbgDebugAdapterDescriptorFactory
     implements vscode.DebugAdapterDescriptorFactory {
 
@@ -30,7 +42,7 @@ export class PiDbgDebugAdapterDescriptorFactory
 
         return new vscode.DebugAdapterExecutable(executable.command, executable.args, {
             // Adapter logs go to stderr; VS Code surfaces them in the Debug Console
-            env: { ...process.env },
+            env: getExecutableEnvironment(),
         });
     }
 
