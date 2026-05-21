@@ -1,0 +1,4 @@
+{
+  "typescript.tsdk": "Source/PiDbg.VsCodeExtension/node_modules/typescript/lib",
+  "dotnet.defaultSolution": "pidbg.slnx"
+}

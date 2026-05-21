@@ -1,0 +1,62 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "PiDbg: NPM Watch",
+      "type": "shell",
+      "command": "npm",
+      "args": [
+        "run",
+        "watch"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/Source/PiDbg.VsCodeExtension"
+      },
+      "isBackground": true,
+      "problemMatcher": "$tsc-watch",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": true,
+        "clear": false
+      }
+    },
+    {
+      "label": "PiDbg: Compile Extension",
+      "type": "shell",
+      "command": "npm",
+      "args": [
+        "run",
+        "compile"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/Source/PiDbg.VsCodeExtension"
+      },
+      "problemMatcher": "$tsc"
+    },
+    {
+      "label": "PiDbg: Build Adapter Debug",
+      "type": "shell",
+      "command": "dotnet build -p:Configuration=Debug ${workspaceFolder}/Source/PiDbg.DebugAdapter/PiDbg.DebugAdapter.csproj"
+    },
+    {
+      "label": "PiDbg: Build Adapter Release",
+      "type": "shell",
+      "command": "dotnet build -p:Configuration=Release ${workspaceFolder}/Source/PiDbg.DebugAdapter/PiDbg.DebugAdapter.csproj"
+    },
+    {
+      "label": "PiDbg: Publish Adapter To Extension Bin",
+      "type": "shell",
+      "command": "npm",
+      "args": [
+        "run",
+        "build-adapter"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/Source/PiDbg.VsCodeExtension"
+      }
+    }
+  ]
+}

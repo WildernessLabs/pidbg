@@ -35,7 +35,8 @@ internal sealed class DapMessage
             var type    = node["type"]?.GetValue<string>() ?? "";
             var command = node["command"]?.GetValue<string>();
             var @event  = node["event"]?.GetValue<string>();
-            var body    = node["body"];
+            // Requests carry payload in "arguments"; responses/events use "body".
+            var body    = type == "request" ? node["arguments"] : node["body"];
 
             return new DapMessage(seq, type, command, @event, body, json);
         }

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
@@ -116,6 +117,18 @@ internal sealed class PiDbgDebugAdapter
         string Get(string key, string defaultValue = "")
             => body[key]?.GetValue<string>() ?? defaultValue;
 
+        string[] GetStringArray(string key)
+        {
+            if (body[key] is not JsonArray array)
+                return Array.Empty<string>();
+
+            return array
+                .Select(v => v?.GetValue<string>())
+                .Where(v => !string.IsNullOrEmpty(v))
+                .Cast<string>()
+                .ToArray();
+        }
+
         var request = new SessionRequest
         {
             Connection = new SshConnectionConfig
@@ -129,6 +142,7 @@ internal sealed class PiDbgDebugAdapter
             },
             AppName     = Get("appName"),
             ProjectPath = Get("projectPath"),
+            AppArgs     = GetStringArray("args"),
         };
 
         if (string.IsNullOrEmpty(request.Connection.Host) ||

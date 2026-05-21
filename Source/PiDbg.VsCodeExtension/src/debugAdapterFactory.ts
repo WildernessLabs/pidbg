@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { PiDbgStatusBar } from './statusBar';
@@ -17,10 +18,7 @@ export class PiDbgDebugAdapterDescriptorFactory
         session: vscode.DebugSession,
         _executable: vscode.DebugAdapterExecutable | undefined
     ): vscode.ProviderResult<vscode.DebugAdapterDescriptor> {
-
-        // pidbg-adapter.exe lives next to the extension in bin/
-        const adapterPath = path.join(
-            this._context.extensionPath, 'bin', 'pidbg-adapter.exe');
+        const executable = this.resolveAdapterExecutable();
 
         this._statusBar.setConnecting(session.configuration['host'] as string);
 
@@ -30,9 +28,34 @@ export class PiDbgDebugAdapterDescriptorFactory
             }
         });
 
-        return new vscode.DebugAdapterExecutable(adapterPath, [], {
+        return new vscode.DebugAdapterExecutable(executable.command, executable.args, {
             // Adapter logs go to stderr; VS Code surfaces them in the Debug Console
             env: { ...process.env },
         });
+    }
+
+    private resolveAdapterExecutable(): { command: string; args: string[] } {
+        const binDir = path.join(this._context.extensionPath, 'bin');
+        const nativeWindows = path.join(binDir, 'pidbg-adapter.exe');
+        const nativePosix = path.join(binDir, 'pidbg-adapter');
+        const managedDll = path.join(binDir, 'pidbg-adapter.dll');
+
+        if (process.platform === 'win32' && fs.existsSync(nativeWindows)) {
+            return { command: nativeWindows, args: [] };
+        }
+
+        if (process.platform !== 'win32' && fs.existsSync(nativePosix)) {
+            return { command: nativePosix, args: [] };
+        }
+
+        if (fs.existsSync(managedDll)) {
+            return { command: 'dotnet', args: [managedDll] };
+        }
+
+        throw new Error(
+            'PiDbg adapter not found. Expected one of: ' +
+            `${nativeWindows}, ${nativePosix}, or ${managedDll}. ` +
+            'Build/publish PiDbg.DebugAdapter into the extension bin folder first.'
+        );
     }
 }

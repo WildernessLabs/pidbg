@@ -1,0 +1,68 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug PiDbg Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "preLaunchTask": "PiDbg: Compile Extension",
+      "runtimeExecutable": "${execPath}",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/Source/PiDbg.VsCodeExtension"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/Source/PiDbg.VsCodeExtension/out/**/*.js"
+      ]
+    },
+    {
+      "name": "Debug PiDbg Adapter (stdio)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "PiDbg: Build Adapter Debug",
+      "program": "${workspaceFolder}/Source/PiDbg.DebugAdapter/bin/Debug/net9.0/pidbg-adapter.dll",
+      "cwd": "${workspaceFolder}",
+      "console": "internalConsole",
+      "stopAtEntry": false,
+      "internalConsoleOptions": "openOnSessionStart"
+    },
+    {
+      "name": "Release PiDbg Adapter (stdio)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "PiDbg: Build Adapter Release",
+      "program": "${workspaceFolder}/Source/PiDbg.DebugAdapter/bin/Release/net9.0/pidbg-adapter.dll",
+      "cwd": "${workspaceFolder}",
+      "console": "internalConsole",
+      "stopAtEntry": false,
+      "internalConsoleOptions": "openOnSessionStart"
+    },
+    {
+      "name": "Debug PiDbg Extension (watch)",
+      "type": "extensionHost",
+      "request": "launch",
+      "preLaunchTask": "PiDbg: NPM Watch",
+      "runtimeExecutable": "${execPath}",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/Source/PiDbg.VsCodeExtension"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/Source/PiDbg.VsCodeExtension/out/**/*.js"
+      ]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Debug Extension + Adapter",
+      "configurations": [
+        "Debug PiDbg Extension",
+        "Debug PiDbg Adapter (stdio)"
+      ]
+    },
+    {
+      "name": "Watch + Debug Extension",
+      "configurations": [
+        "Debug PiDbg Extension (watch)"
+      ]
+    }
+  ]
+}

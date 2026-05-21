@@ -1,0 +1,108 @@
+name: PiDbg VSCode Extension
+
+env:
+  IDE_TOOLS_RELEASE_VERSION: 0.1.0
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  build-vscode:
+    runs-on: windows-latest
+    name: Build PiDbg VSCode Extension
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 9.0.x
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Create CI NuGet config (single source)
+        shell: pwsh
+        run: |
+          @"
+          <?xml version="1.0" encoding="utf-8"?>
+          <configuration>
+            <packageSources>
+              <clear />
+              <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+            </packageSources>
+          </configuration>
+          "@ | Set-Content -Path NuGet.CI.config
+
+      - if: ${{ github.event_name == 'workflow_dispatch' }}
+        name: Update VS Code extension version
+        shell: pwsh
+        run: |
+          $path = "Source/PiDbg.VsCodeExtension/package.json"
+          $content = Get-Content $path | Out-String
+          $newContent = $content -replace '"version":\s*"[^"]+"', '"version": "${{ env.IDE_TOOLS_RELEASE_VERSION }}"'
+          $newContent | Set-Content $path
+
+      - name: Restore adapter dependencies
+        run: dotnet restore Source/PiDbg.DebugAdapter/PiDbg.DebugAdapter.csproj --configfile NuGet.CI.config -bl:restore.binlog
+
+      - name: Build adapter
+        run: dotnet build Source/PiDbg.DebugAdapter/PiDbg.DebugAdapter.csproj -c Release --no-restore -bl:build.binlog
+
+      - name: Install extension dependencies
+        working-directory: Source/PiDbg.VsCodeExtension
+        run: npm install
+
+      - name: Compile extension TypeScript
+        working-directory: Source/PiDbg.VsCodeExtension
+        run: npm run compile
+
+      - name: Publish adapter into extension bin
+        working-directory: Source/PiDbg.VsCodeExtension
+        run: npm run build-adapter
+
+      - name: Verify adapter artifacts
+        shell: pwsh
+        run: |
+          if (!(Test-Path "Source/PiDbg.VsCodeExtension/bin/pidbg-adapter.dll")) {
+            throw "Expected adapter DLL not found in extension bin folder."
+          }
+
+      - if: ${{ github.ref != 'refs/heads/main' }}
+        name: Build pre-release VSIX on non-main branches
+        working-directory: Source/PiDbg.VsCodeExtension
+        run: npx vsce package --pre-release
+
+      - if: ${{ github.ref == 'refs/heads/main' }}
+        name: Build release VSIX on main branch
+        working-directory: Source/PiDbg.VsCodeExtension
+        run: npx vsce package
+
+      - name: Upload VSIX artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiDbg.VSCodeExtension.vsix.${{ env.IDE_TOOLS_RELEASE_VERSION }}
+          path: Source/PiDbg.VsCodeExtension/*.vsix
+
+      - name: Upload binlog artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BinLogs
+          path: "**/*.binlog"
+
+      - if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
+        name: Publish VS Code extension
+        working-directory: Source/PiDbg.VsCodeExtension
+        run: npx vsce publish -p ${{ secrets.MARKETPLACE_PUBLISH_PAT }}

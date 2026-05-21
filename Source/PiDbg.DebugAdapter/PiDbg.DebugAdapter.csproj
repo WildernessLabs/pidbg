@@ -5,9 +5,7 @@
     <OutputType>Exe</OutputType>
     <RootNamespace>PiDbg.DebugAdapter</RootNamespace>
     <AssemblyName>pidbg-adapter</AssemblyName>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <SelfContained>true</SelfContained>
-    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>false</SelfContained>
   </PropertyGroup>
 
   <ItemGroup>

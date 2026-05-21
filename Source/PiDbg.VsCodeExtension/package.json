@@ -14,8 +14,8 @@
         "type": "pidbg",
         "label": "Raspberry Pi (.NET)",
         "languages": ["csharp"],
-        "program": "./bin/pidbg-adapter.exe",
-        "runtime": "",
+        "program": "./bin/pidbg-adapter.dll",
+        "runtime": "dotnet",
         "configurationAttributes": {
           "launch": {
             "required": ["host", "username", "appName", "projectPath"],
@@ -79,6 +79,7 @@
     ]
   },
   "scripts": {
+    "build-adapter": "dotnet publish ../PiDbg.DebugAdapter/PiDbg.DebugAdapter.csproj -c Release -o ./bin",
     "compile": "tsc -p ./",
     "watch":   "tsc -watch -p ./",
     "package": "vsce package"
