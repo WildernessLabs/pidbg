@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net.Sockets;
 using System.Threading;
@@ -44,6 +45,55 @@ internal sealed partial class DapProxy : IDisposable
         var toVsdbg   = new DapWriter(netStream);
 
         return new DapProxy(fromVsCode, toVsCode, tcp, fromVsdbg, toVsdbg, logger);
+    }
+
+    // Send initialize+attach to vsdbg, consume those responses, forward vsdbg events to VS Code.
+    // After this returns, the full proxy loop can start: VS Code setBreakpoints/configurationDone
+    // messages flow through the proxy directly to vsdbg.
+    public async Task HandshakeWithVsdbgAsync(int appPid, CancellationToken ct)
+    {
+        var init = DapMessage.BuildRequest(1, "initialize", new
+        {
+            clientID   = "pidbg",
+            clientName = "PiDbg",
+            adapterID  = "coreclr",
+            locale     = "en-US",
+            linesStartAt1   = true,
+            columnsStartAt1 = true,
+            pathFormat      = "path",
+            supportsVariableType          = true,
+            supportsVariablePaging        = true,
+            supportsRunInTerminalRequest  = false,
+            supportsMemoryReferences      = true,
+            supportsProgressReporting     = true,
+        });
+        await _toVsdbg.WriteMessageAsync(init, ct).ConfigureAwait(false);
+
+        var attach = DapMessage.BuildRequest(2, "attach", new { processId = appPid });
+        await _toVsdbg.WriteMessageAsync(attach, ct).ConfigureAwait(false);
+
+        // Drain vsdbg until we have responses for both initialize (req_seq=1) and attach (req_seq=2).
+        // Forward events to VS Code; discard the two handshake responses (VS Code didn't send those requests).
+        var pending = new HashSet<int> { 1, 2 };
+        while (pending.Count > 0)
+        {
+            var json = await _fromVsdbg.ReadMessageAsync(ct).ConfigureAwait(false);
+            if (json is null) throw new IOException("vsdbg disconnected during handshake");
+
+            var msg = DapMessage.TryParse(json);
+            if (msg is null) continue;
+
+            if (msg.Type == "response")
+            {
+                pending.Remove(msg.RequestSeq);
+                LogHandshakeResponse(_logger, msg.Command ?? "?", msg.RequestSeq);
+            }
+            else
+            {
+                // Forward events (initialized, output, module, thread …) straight to VS Code.
+                await _toVsCode.WriteMessageAsync(json, ct).ConfigureAwait(false);
+            }
+        }
     }
 
     // Run the proxy loop. Returns when the session ends (disconnect or error).
@@ -104,4 +154,7 @@ internal sealed partial class DapProxy : IDisposable
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Proxy channel closed")]
     private static partial void LogProxyChannelClosed(ILogger logger, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "vsdbg handshake: got response for {Command} (request_seq={RequestSeq})")]
+    private static partial void LogHandshakeResponse(ILogger logger, string command, int requestSeq);
 }

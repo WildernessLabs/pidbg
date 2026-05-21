@@ -59,18 +59,9 @@ internal sealed partial class PiDbgDebugAdapter
                     case "launch":
                         sessionInfo = await HandleLaunchAsync(msg, ct).ConfigureAwait(false);
                         if (sessionInfo is null) return (null, null);
-                        break;
-
-                    case "setBreakpoints":
-                    case "setFunctionBreakpoints":
-                    case "setExceptionBreakpoints":
-                    case "configurationDone":
-                        await SendResponseAsync(msg.Seq, msg.Command!, success: true, ct: ct)
-                            .ConfigureAwait(false);
-
-                        if (msg.Command == "configurationDone")
-                            return (sessionInfo, null);
-                        break;
+                        // Return immediately — the proxy will handle setBreakpoints/configurationDone
+                        // after vsdbg sends its own "initialized" event to VS Code.
+                        return (sessionInfo, null);
 
                     case "disconnect":
                     case "terminate":
@@ -98,8 +89,8 @@ internal sealed partial class PiDbgDebugAdapter
         };
         await SendResponseAsync(msg.Seq, "initialize", success: true, body: capabilities, ct: ct)
             .ConfigureAwait(false);
-
-        await SendEventAsync("initialized", body: (object?)null, ct).ConfigureAwait(false);
+        // "initialized" event is deferred — sent by vsdbg after the tunnel handshake,
+        // so VS Code's setBreakpoints/configurationDone flow through the proxy to vsdbg.
     }
 
     private async Task<DebugSessionInfo?> HandleLaunchAsync(DapMessage msg, CancellationToken ct)

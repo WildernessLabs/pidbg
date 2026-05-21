@@ -60,6 +60,11 @@ try
             logFactory.CreateLogger<DapProxy>(),
             cts.Token).ConfigureAwait(false);
 
+        // Initialize vsdbg and attach to the app process.
+        // vsdbg will send its own "initialized" event, which the handshake forwards to VS Code.
+        // VS Code reacts with setBreakpoints/configurationDone, which the proxy loop below handles.
+        await proxy.HandshakeWithVsdbgAsync(info.AppPid, cts.Token).ConfigureAwait(false);
+
         await proxy.RunAsync(
             onDisconnect: () =>
             {
