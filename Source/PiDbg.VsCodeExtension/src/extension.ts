@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { PiDbgConfigurationProvider } from './configurationProvider';
 import { PiDbgDebugAdapterDescriptorFactory } from './debugAdapterFactory';
 import { PiDbgStatusBar } from './statusBar';
 
@@ -12,6 +13,13 @@ export function activate(context: vscode.ExtensionContext): void {
     const factory = new PiDbgDebugAdapterDescriptorFactory(context, statusBar, output);
     context.subscriptions.push(
         vscode.debug.registerDebugAdapterDescriptorFactory('pidbg', factory)
+    );
+
+    const configProvider = new PiDbgConfigurationProvider(context);
+    context.subscriptions.push(
+        vscode.debug.registerDebugConfigurationProvider(
+            'pidbg', configProvider, vscode.DebugConfigurationProviderTriggerKind.Initial
+        )
     );
 
     context.subscriptions.push(

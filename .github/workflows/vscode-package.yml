@@ -1,0 +1,58 @@
+name: Package VS Code extension
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Source/PiDbg.VsCodeExtension/**"
+      - "Source/PiDbg.DebugAdapter/**"
+      - "build.ps1"
+    tags:
+      - "v*"
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build and package extension
+        shell: pwsh
+        run: ./build.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pidbg-vsix
+          path: dist/*.vsix
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build and package extension
+        shell: pwsh
+        run: ./build.ps1
+
+      - name: Publish to VS Code Marketplace
+        working-directory: Source/PiDbg.VsCodeExtension
+        run: npx vsce publish --target win32-x64 -p ${{ secrets.VSCE_PAT }}

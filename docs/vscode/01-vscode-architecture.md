@@ -217,14 +217,18 @@ provides `MsBuildPublishRunner`; the adapter provides `CliPublishRunner`.
 ### Build pipeline
 
 ```
-build.ps1
-  1. dotnet publish src/PiDbg.DebugAdapter -r win-x64 --self-contained -o src/PiDbg.VsCodeExtension/bin/
-  2. cd src/PiDbg.VsCodeExtension && npm install && npm run compile
-  3. vsce package --out ../../dist/pidbg-vscode-{version}.vsix
+build.ps1 (repo root)
+  1. dotnet publish Source/PiDbg.DebugAdapter -c Release -r win-x64 --self-contained true -o Source/PiDbg.VsCodeExtension/bin/
+  2. cd Source/PiDbg.VsCodeExtension && npm install && npm run compile
+  3. vsce package --target win32-x64 --out ../../dist/pidbg-vscode-{version}.vsix
 ```
 
-The adapter binary is committed to `bin/.gitkeep`; the actual exe is copied at build time
-and excluded from source control via `.vscodeignore`.
+Only `bin/.gitkeep` is committed to source control; the actual adapter exe (and its
+runtime-required siblings, currently `appsettings.json` and `grpc_csharp_ext.x64.dll`) are
+copied in at build time and excluded from the packaged `.vsix` via `.vscodeignore` only
+where they're confirmed build-only artifacts (e.g. the loose `meadow-daemon` copy, which
+is already embedded as a resource inside the adapter exe and does not need to ship again
+as a separate file).
 
 ---
 

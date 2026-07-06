@@ -4,6 +4,17 @@
   "description": "Debug .NET 10 applications on Raspberry Pi ARM64 from VS Code",
   "version": "0.1.0",
   "publisher": "wildernessLabs",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/WildernessLabs/pidbg.git",
+    "directory": "Source/PiDbg.VsCodeExtension"
+  },
+  "bugs": {
+    "url": "https://github.com/WildernessLabs/pidbg/issues"
+  },
+  "homepage": "https://github.com/WildernessLabs/pidbg/tree/main/Source/PiDbg.VsCodeExtension#readme",
+  "keywords": ["raspberry pi", "debugger", "remote debugging", "dotnet", "arm64", "meadow"],
   "engines": { "vscode": "^1.90.0" },
   "categories": ["Debuggers"],
   "activationEvents": ["onDebug"],
@@ -32,18 +43,6 @@
             }
           }
         },
-        "initialConfigurations": [
-          {
-            "type":           "pidbg",
-            "request":        "launch",
-            "name":           "Debug on Raspberry Pi",
-            "host":           "raspberrypi.local",
-            "username":       "pi",
-            "privateKeyPath": "${userHome}/.ssh/pidbg_rsa",
-            "appName":        "${workspaceFolderBasename}",
-            "projectPath":    "${workspaceFolder}/${workspaceFolderBasename}.csproj"
-          }
-        ],
         "configurationSnippets": [
           {
             "label": "PiDbg: Debug on Raspberry Pi",

@@ -4,3 +4,7 @@ src/**
 out/**/*.map
 tsconfig.json
 .vscodeignore
+bin/publish/**
+bin/meadow-daemon
+bin/meadow-daemon.staticwebassets.endpoints.json
+bin/appsettings.Development.json
