@@ -1,9 +1,9 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 using PiDbg.Infrastructure;
 
 namespace PiDbg.Provisioning;
@@ -12,39 +12,56 @@ internal static class RuntimeInstaller
 {
     internal readonly record struct RequiredFramework(string Name, Version Version);
 
-    // Reads the app's own runtimeconfig.json (produced by `dotnet publish` on the dev
-    // machine) to find the specific .NET runtime it requires. Mirrors the JSON shape
-    // parsed server-side by Meadow.Daemon's ProcessManager.CheckRuntimeCompatibility.
-    public static RequiredFramework? ReadRequiredFramework(string publishDir, string appName)
+    // Reads the project's <TargetFramework> (or first entry of <TargetFrameworks>)
+    // directly from the .csproj - available immediately, before any SSH connection,
+    // provisioning, or publish. This lets the runtime check run and fail fast up
+    // front, rather than only being discoverable after a full publish cycle.
+    public static RequiredFramework? ReadRequiredFrameworkFromProject(string projectPath)
     {
-        var runtimeConfigPath = Path.Combine(publishDir, $"{appName}.runtimeconfig.json");
-        if (!File.Exists(runtimeConfigPath))
+        if (!File.Exists(projectPath))
             return null;
 
         try
         {
-            using var doc = JsonDocument.Parse(File.ReadAllText(runtimeConfigPath));
-            if (!doc.RootElement.TryGetProperty("runtimeOptions", out var runtimeOptions))
-                return null;
-            if (!runtimeOptions.TryGetProperty("framework", out var framework))
-                return null;
-            if (!framework.TryGetProperty("name", out var nameEl) ||
-                !framework.TryGetProperty("version", out var versionEl))
+            var doc = XDocument.Load(projectPath);
+            var tfm = doc.Descendants("TargetFramework").FirstOrDefault()?.Value;
+            if (string.IsNullOrWhiteSpace(tfm))
+            {
+                tfm = doc.Descendants("TargetFrameworks").FirstOrDefault()?.Value
+                    ?.Split(';')
+                    .Select(t => t.Trim())
+                    .FirstOrDefault(t => t.Length > 0);
+            }
+
+            if (string.IsNullOrWhiteSpace(tfm))
                 return null;
 
-            var name = nameEl.GetString();
-            var versionText = versionEl.GetString();
-            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(versionText))
-                return null;
-            if (!Version.TryParse(versionText, out var version))
-                return null;
-
-            return new RequiredFramework(name!, version);
+            return ParseTfm(tfm!.Trim());
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is System.Xml.XmlException || ex is IOException || ex is UnauthorizedAccessException)
         {
-            return null; // Malformed/unexpected shape - don't block on a parsing issue.
+            return null; // Don't block on a parsing issue - fail open.
         }
+    }
+
+    // Converts an SDK-style TFM (net10.0, net8.0-windows, netcoreapp3.1) into the
+    // shared-runtime version it maps to. Returns null for TFMs with no shared-runtime
+    // concept (e.g. classic .NET Framework "net472") - nothing to check there.
+    private static RequiredFramework? ParseTfm(string tfm)
+    {
+        var dash = tfm.IndexOf('-');
+        var core = dash >= 0 ? tfm.Substring(0, dash) : tfm;
+
+        string? versionText = null;
+        if (core.StartsWith("netcoreapp", StringComparison.OrdinalIgnoreCase))
+            versionText = core.Substring("netcoreapp".Length);
+        else if (core.StartsWith("net", StringComparison.OrdinalIgnoreCase) && core.Contains("."))
+            versionText = core.Substring("net".Length);
+
+        if (versionText is null || !Version.TryParse(versionText, out var version))
+            return null;
+
+        return new RequiredFramework("Microsoft.NETCore.App", version);
     }
 
     // Checks whether the device already has an installed shared runtime satisfying

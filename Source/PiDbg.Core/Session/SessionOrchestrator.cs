@@ -50,26 +50,11 @@ public sealed partial class SessionOrchestrator
         progress.Report("Connecting...");
         var session = await _ssh.ConnectAsync(request.Connection, ct).ConfigureAwait(false);
 
-        // --- Step 2: Provision ---
-        progress.Report("Provisioning...");
-        var provision = await _provisioning
-            .ProvisionAsync(session, request.Connection.RootFolder, progress, ct)
-            .ConfigureAwait(false);
-
-        if (!provision.Success)
-            throw new InvalidOperationException($"Provisioning failed: {provision.Error}");
-
-        var channel = provision.GrpcChannel!;
-
-        // --- Step 3: Publish ---
-        progress.Report("Publishing...");
-        var publishResult = await _publisher
-            .PublishAsync(request.ProjectPath, request.AppName, progress, ct)
-            .ConfigureAwait(false);
-        progress.Report($"Published in {publishResult.Duration.TotalSeconds:F1}s");
-
-        // --- Step 3.5: Verify device has a compatible .NET runtime for this app ---
-        var requiredFx = RuntimeInstaller.ReadRequiredFramework(publishResult.PublishDir, request.AppName);
+        // --- Step 1.5: Verify device has a compatible .NET runtime for this app ---
+        // Read directly from the project's <TargetFramework> - known immediately, no
+        // publish needed - so a mismatch is caught and reported (or fixed) up front,
+        // before wasting time on provisioning/publish for a session that can't work.
+        var requiredFx = RuntimeInstaller.ReadRequiredFrameworkFromProject(request.ProjectPath);
         if (requiredFx is { } required)
         {
             progress.Report("Checking .NET runtime...");
@@ -88,6 +73,24 @@ public sealed partial class SessionOrchestrator
                 await RuntimeInstaller.InstallAsync(session, required, progress, ct).ConfigureAwait(false);
             }
         }
+
+        // --- Step 2: Provision ---
+        progress.Report("Provisioning...");
+        var provision = await _provisioning
+            .ProvisionAsync(session, request.Connection.RootFolder, progress, ct)
+            .ConfigureAwait(false);
+
+        if (!provision.Success)
+            throw new InvalidOperationException($"Provisioning failed: {provision.Error}");
+
+        var channel = provision.GrpcChannel!;
+
+        // --- Step 3: Publish ---
+        progress.Report("Publishing...");
+        var publishResult = await _publisher
+            .PublishAsync(request.ProjectPath, request.AppName, progress, ct)
+            .ConfigureAwait(false);
+        progress.Report($"Published in {publishResult.Duration.TotalSeconds:F1}s");
 
         // --- Step 4: Deploy ---
         progress.Report("Deploying...");
