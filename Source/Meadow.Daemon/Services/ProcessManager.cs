@@ -192,6 +192,13 @@ internal class ProcessManager : IProcessManager, IDisposable
         return null;
     }
 
+    public int? GetExitCode(string appName)
+    {
+        if (_processes.TryGetValue(appName, out var managed) && managed.Handle != null && managed.Handle.HasExited)
+            return managed.Handle.ExitCode;
+        return null;
+    }
+
     public ProcessOutputBroadcaster GetOutputBroadcaster(string appName)
     {
         var managed = _processes.GetOrAdd(appName, _ => new ManagedProcess());

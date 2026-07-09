@@ -35,15 +35,33 @@ internal class DebugSessionManager : IDebugSessionManager
         string appName, SessionMode mode, string correlationId, CancellationToken ct)
     {
         // Ensure app is running (start if not)
+        int appPid;
         if (_processManager.GetState(appName) != AppState.Running)
         {
             var startResult = await _processManager.StartAsync(appName, ct);
             if (!startResult.Success)
                 throw new InvalidOperationException($"App '{appName}' failed to start: {startResult.Error}");
-        }
 
-        var appPid = _processManager.GetPid(appName)
-            ?? throw new InvalidOperationException($"App '{appName}' failed to start (PID is null)");
+            appPid = startResult.Pid
+                ?? throw new InvalidOperationException($"App '{appName}' started but no PID was returned.");
+
+            // The process can exit immediately after starting (e.g. an unhandled
+            // exception during startup) - report that clearly, including the exit
+            // code, instead of losing the signal behind a generic "no PID" error.
+            if (_processManager.GetPid(appName) is null)
+            {
+                var exitCode = _processManager.GetExitCode(appName);
+                throw new InvalidOperationException(
+                    exitCode is null
+                        ? $"App '{appName}' exited immediately after starting (PID {appPid})."
+                        : $"App '{appName}' exited immediately after starting (PID {appPid}, exit code {exitCode}). Check the app's startup output for the cause.");
+            }
+        }
+        else
+        {
+            appPid = _processManager.GetPid(appName)
+                ?? throw new InvalidOperationException($"App '{appName}' is marked as running but no active process was found.");
+        }
 
         // Allocate port and launch vsdbg
         var port     = _vsdbgLauncher.AllocatePort();

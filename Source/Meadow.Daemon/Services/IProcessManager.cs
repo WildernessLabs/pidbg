@@ -9,6 +9,7 @@ public interface IProcessManager
     Task<StartProcessResult> RestartAsync(string appName, CancellationToken ct);
     AppState GetState(string appName);
     int? GetPid(string appName);
+    int? GetExitCode(string appName);
     ProcessOutputBroadcaster GetOutputBroadcaster(string appName);
     void ReconcileRunningProcess(string appName, int pid);
 }

@@ -2,7 +2,7 @@
   "name": "pidbg",
   "displayName": "PiDbg — Raspberry Pi .NET Debugger",
   "description": "Debug .NET applications on Raspberry Pi ARM64 from VS Code",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "publisher": "wildernessLabs",
   "license": "MIT",
   "repository": {

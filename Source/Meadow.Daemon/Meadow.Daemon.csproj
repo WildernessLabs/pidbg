@@ -5,7 +5,7 @@
     <RootNamespace>Meadow.Daemon</RootNamespace>
     <AssemblyName>meadow-daemon</AssemblyName>
     <OutputType>Exe</OutputType>
-    <Version>1.0.19</Version>
+    <Version>1.0.20</Version>
 
     <!-- Self-contained single-file for linux-arm64 -->
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">linux-arm64</RuntimeIdentifier>
