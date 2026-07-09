@@ -10,6 +10,7 @@ public interface IProcessManager
     AppState GetState(string appName);
     int? GetPid(string appName);
     int? GetExitCode(string appName);
+    IReadOnlyList<string> GetRecentOutput(string appName);
     ProcessOutputBroadcaster GetOutputBroadcaster(string appName);
     void ReconcileRunningProcess(string appName, int pid);
 }

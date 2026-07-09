@@ -105,6 +105,9 @@ internal sealed partial class PiDbgDebugAdapter
         string Get(string key, string defaultValue = "")
             => body[key]?.GetValue<string>() ?? defaultValue;
 
+        bool GetBool(string key, bool defaultValue = false)
+            => body[key]?.GetValue<bool>() ?? defaultValue;
+
         var request = new SessionRequest
         {
             Connection = new SshConnectionConfig
@@ -118,6 +121,7 @@ internal sealed partial class PiDbgDebugAdapter
             },
             AppName     = Get("appName"),
             ProjectPath = Get("projectPath"),
+            DeployRuntimeIfNecessary = GetBool("deployRuntimeIfNecessary"),
         };
 
         if (string.IsNullOrEmpty(request.Connection.Host) ||

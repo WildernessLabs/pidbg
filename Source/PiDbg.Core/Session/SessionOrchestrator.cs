@@ -8,6 +8,7 @@ using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 using PiDbg.Build;
 using PiDbg.Deploy;
 using PiDbg.Infrastructure;
+using PiDbg.Provisioning;
 
 namespace PiDbg.Core;
 
@@ -66,6 +67,27 @@ public sealed partial class SessionOrchestrator
             .PublishAsync(request.ProjectPath, request.AppName, progress, ct)
             .ConfigureAwait(false);
         progress.Report($"Published in {publishResult.Duration.TotalSeconds:F1}s");
+
+        // --- Step 3.5: Verify device has a compatible .NET runtime for this app ---
+        var requiredFx = RuntimeInstaller.ReadRequiredFramework(publishResult.PublishDir, request.AppName);
+        if (requiredFx is { } required)
+        {
+            progress.Report("Checking .NET runtime...");
+            var (satisfied, installedText) = await RuntimeInstaller
+                .IsSatisfiedAsync(session, required, ct).ConfigureAwait(false);
+
+            if (!satisfied)
+            {
+                if (!request.DeployRuntimeIfNecessary)
+                    throw new InvalidOperationException(
+                        $"Project targets .NET {required.Name} {required.Version}, but device only has " +
+                        $"{installedText} installed. Set \"deployRuntimeIfNecessary\": true in launch.json " +
+                        $"to install it automatically, or install .NET {required.Version} manually on the device.");
+
+                progress.Report($"Installing .NET {required.Version}...");
+                await RuntimeInstaller.InstallAsync(session, required, progress, ct).ConfigureAwait(false);
+            }
+        }
 
         // --- Step 4: Deploy ---
         progress.Report("Deploying...");

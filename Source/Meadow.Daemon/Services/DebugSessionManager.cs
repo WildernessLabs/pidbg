@@ -47,21 +47,25 @@ internal class DebugSessionManager : IDebugSessionManager
 
             // The process can exit immediately after starting (e.g. an unhandled
             // exception during startup) - report that clearly, including the exit
-            // code, instead of losing the signal behind a generic "no PID" error.
+            // code and captured output, instead of losing the signal behind a
+            // generic "no PID" error.
             if (_processManager.GetPid(appName) is null)
-            {
-                var exitCode = _processManager.GetExitCode(appName);
-                throw new InvalidOperationException(
-                    exitCode is null
-                        ? $"App '{appName}' exited immediately after starting (PID {appPid})."
-                        : $"App '{appName}' exited immediately after starting (PID {appPid}, exit code {exitCode}). Check the app's startup output for the cause.");
-            }
+                throw new InvalidOperationException(BuildCrashMessage(appName, appPid));
         }
         else
         {
             appPid = _processManager.GetPid(appName)
                 ?? throw new InvalidOperationException($"App '{appName}' is marked as running but no active process was found.");
         }
+
+        // A brief grace period, then one more liveness check before handing off to
+        // vsdbg: a fast-crashing app (e.g. a hardware/permissions failure during
+        // startup) can die in the gap between the check above and vsdbg's attach,
+        // which otherwise surfaces only as vsdbg's generic "process has been
+        // terminated" with no indication of the real cause.
+        await Task.Delay(300, ct).ConfigureAwait(false);
+        if (_processManager.GetPid(appName) is null)
+            throw new InvalidOperationException(BuildCrashMessage(appName, appPid));
 
         // Allocate port and launch vsdbg
         var port     = _vsdbgLauncher.AllocatePort();
@@ -149,5 +153,22 @@ internal class DebugSessionManager : IDebugSessionManager
         // Simple placeholder for ULID: lexicographically sortable timestamp + random
         // For actual production we'd use a ULID library.
         return DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString("D15", CultureInfo.InvariantCulture) + Guid.NewGuid().ToString("N")[..10];
+    }
+
+    private string BuildCrashMessage(string appName, int appPid)
+    {
+        var exitCode = _processManager.GetExitCode(appName);
+        var output = _processManager.GetRecentOutput(appName);
+
+        var message = exitCode is null
+            ? $"App '{appName}' exited immediately after starting (PID {appPid})."
+            : $"App '{appName}' exited immediately after starting (PID {appPid}, exit code {exitCode}).";
+
+        if (output.Count > 0)
+            message += "\nRecent output:\n" + string.Join('\n', output);
+        else
+            message += " No output was captured before it exited.";
+
+        return message;
     }
 }

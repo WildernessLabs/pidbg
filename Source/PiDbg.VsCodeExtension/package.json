@@ -2,7 +2,7 @@
   "name": "pidbg",
   "displayName": "PiDbg — Raspberry Pi .NET Debugger",
   "description": "Debug .NET applications on Raspberry Pi ARM64 from VS Code",
-  "version": "0.9.3",
+  "version": "0.9.5",
   "publisher": "wildernessLabs",
   "license": "MIT",
   "repository": {
@@ -39,7 +39,8 @@
               "appName":        { "type": "string",  "description": "Application name (used for deployment path)" },
               "projectPath":    { "type": "string",  "description": "Absolute path to .csproj file" },
               "rootFolder":     { "type": "string",  "description": "Root folder on Pi (default ~/meadow)", "default": "~/meadow" },
-              "args":           { "type": "array",   "items": { "type": "string" }, "description": "Arguments passed to the application" }
+              "args":           { "type": "array",   "items": { "type": "string" }, "description": "Arguments passed to the application" },
+              "deployRuntimeIfNecessary": { "type": "boolean", "description": "Automatically install the required .NET runtime on the device if missing (default false)", "default": false }
             }
           }
         },

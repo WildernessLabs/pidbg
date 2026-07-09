@@ -8,4 +8,5 @@ public sealed record SessionRequest
     public string              AppName     { get; init; } = "";
     public string              ProjectPath { get; init; } = "";
     public string[]            AppArgs     { get; init; } = System.Array.Empty<string>();
+    public bool                DeployRuntimeIfNecessary { get; init; }
 }

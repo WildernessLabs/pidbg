@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using Microsoft.Extensions.Options;
 using Meadow.Daemon.Contracts.V1;
 using Meadow.Daemon.Models;
@@ -27,6 +28,8 @@ internal class ProcessManager : IProcessManager, IDisposable
         _logger = logger;
     }
 
+    private const int RecentOutputCapacity = 50;
+
     private sealed class ManagedProcess : IDisposable
     {
         public Process?                 Handle       { get; set; }
@@ -34,6 +37,18 @@ internal class ProcessManager : IProcessManager, IDisposable
         public AppState                 State        { get; set; } = AppState.Stopped;
         public int                      RestartCount { get; set; }
         public DateTimeOffset           LastCrashAt  { get; set; }
+
+        // Best-effort ring buffer of recent stdout/stderr lines, kept independent of the
+        // pub/sub Broadcaster so crash output is still available even if nothing was
+        // subscribed to live-stream it at the moment the process failed.
+        public ConcurrentQueue<string> RecentOutput { get; } = new();
+
+        public void AppendRecentOutput(string line)
+        {
+            RecentOutput.Enqueue(line);
+            while (RecentOutput.Count > RecentOutputCapacity)
+                RecentOutput.TryDequeue(out _);
+        }
 
         public void Dispose() => Broadcaster.Dispose();
     }
@@ -52,6 +67,7 @@ internal class ProcessManager : IProcessManager, IDisposable
             return new StartProcessResult(true, managed.Handle.Id, null);
 
         managed.State = AppState.Starting;
+        managed.RecentOutput.Clear();
 
         var debugDir = DaemonPaths.AppDebugDir(_options, appName);
         var entryPoint = Path.Combine(debugDir, app.EntryPoint.Replace('/', Path.DirectorySeparatorChar));
@@ -62,7 +78,15 @@ internal class ProcessManager : IProcessManager, IDisposable
             return new StartProcessResult(false, null, $"Entry point not found: {entryPoint}");
         }
 
-        var info = new ProcessStartInfo(ResolveDotnetExecutable(), entryPoint)
+        var dotnetExecutable = ResolveDotnetExecutable();
+        var compatError = CheckRuntimeCompatibility(entryPoint, dotnetExecutable);
+        if (compatError != null)
+        {
+            managed.State = AppState.Failed;
+            return new StartProcessResult(false, null, compatError);
+        }
+
+        var info = new ProcessStartInfo(dotnetExecutable, entryPoint)
         {
             WorkingDirectory       = debugDir,
             RedirectStandardOutput = true,
@@ -88,23 +112,29 @@ internal class ProcessManager : IProcessManager, IDisposable
             process.OutputDataReceived += (_, e) =>
             {
                 if (e.Data != null)
+                {
+                    managed.AppendRecentOutput($"[stdout] {e.Data}");
                     managed.Broadcaster.TryWrite(new OutputLine
                     {
                         Stream    = OutputStream.Stdout,
                         Text      = e.Data,
                         TimestampMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
                     });
+                }
             };
-            
+
             process.ErrorDataReceived += (_, e) =>
             {
                 if (e.Data != null)
+                {
+                    managed.AppendRecentOutput($"[stderr] {e.Data}");
                     managed.Broadcaster.TryWrite(new OutputLine
                     {
                         Stream    = OutputStream.Stderr,
                         Text      = e.Data,
                         TimestampMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
                     });
+                }
             };
             
             process.Exited += (_, _) => OnProcessExited(appName, managed);
@@ -199,6 +229,13 @@ internal class ProcessManager : IProcessManager, IDisposable
         return null;
     }
 
+    public IReadOnlyList<string> GetRecentOutput(string appName)
+    {
+        if (_processes.TryGetValue(appName, out var managed))
+            return managed.RecentOutput.ToArray();
+        return Array.Empty<string>();
+    }
+
     public ProcessOutputBroadcaster GetOutputBroadcaster(string appName)
     {
         var managed = _processes.GetOrAdd(appName, _ => new ManagedProcess());
@@ -221,6 +258,85 @@ internal class ProcessManager : IProcessManager, IDisposable
             }
         }
         catch { /* process not found or no access */ }
+    }
+
+    // Best-effort pre-flight check: does an installed shared runtime on this device
+    // satisfy what the app's own runtimeconfig.json requires? Catches version
+    // mismatches (e.g. app built for net10.0, device only has .NET 8 installed) with
+    // a clear, actionable message instead of a "framework not found" crash a few
+    // hundred milliseconds into the debug session.
+    private static string? CheckRuntimeCompatibility(string entryPoint, string dotnetExecutable)
+    {
+        var runtimeConfigPath = Path.ChangeExtension(entryPoint, null) + ".runtimeconfig.json";
+        if (!File.Exists(runtimeConfigPath))
+            return null; // Nothing to check against - don't block the launch.
+
+        var dotnetDir = Path.GetDirectoryName(dotnetExecutable);
+        if (string.IsNullOrEmpty(dotnetDir) || dotnetExecutable == "dotnet")
+            return null; // Couldn't resolve an actual install location - can't verify.
+
+        List<(string Name, string Version)> required;
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(runtimeConfigPath));
+            if (!doc.RootElement.TryGetProperty("runtimeOptions", out var runtimeOptions))
+                return null;
+
+            required = new List<(string, string)>();
+
+            if (runtimeOptions.TryGetProperty("framework", out var single))
+                AddFramework(single, required);
+
+            if (runtimeOptions.TryGetProperty("frameworks", out var many) && many.ValueKind == JsonValueKind.Array)
+                foreach (var fx in many.EnumerateArray())
+                    AddFramework(fx, required);
+        }
+        catch (JsonException)
+        {
+            return null; // Malformed/unexpected shape - don't block on a parsing issue.
+        }
+
+        var missing = new List<string>();
+        foreach (var (name, versionText) in required)
+        {
+            if (!Version.TryParse(versionText, out var requiredVersion))
+                continue;
+
+            var sharedDir = Path.Combine(dotnetDir, "shared", name);
+            var installed = Directory.Exists(sharedDir)
+                ? Directory.GetDirectories(sharedDir)
+                    .Select(d => Version.TryParse(Path.GetFileName(d), out var v) ? v : null)
+                    .Where(v => v != null)
+                    .Cast<Version>()
+                    .ToList()
+                : new List<Version>();
+
+            var satisfied = installed.Any(v => v.Major == requiredVersion.Major && v >= requiredVersion);
+            if (!satisfied)
+            {
+                var installedText = installed.Count > 0
+                    ? string.Join(", ", installed.OrderByDescending(v => v))
+                    : "none";
+                missing.Add($"{name} {versionText} (installed: {installedText})");
+            }
+        }
+
+        if (missing.Count == 0)
+            return null;
+
+        return $"Required .NET runtime not installed on device: {string.Join("; ", missing)}. " +
+               "Install the matching .NET runtime on the Pi, or retarget the project to a version already installed there.";
+    }
+
+    private static void AddFramework(JsonElement element, List<(string Name, string Version)> into)
+    {
+        if (element.TryGetProperty("name", out var name) && element.TryGetProperty("version", out var version))
+        {
+            var n = name.GetString();
+            var v = version.GetString();
+            if (!string.IsNullOrEmpty(n) && !string.IsNullOrEmpty(v))
+                into.Add((n, v));
+        }
     }
 
     private static string ResolveDotnetExecutable()
