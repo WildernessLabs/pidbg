@@ -55,11 +55,11 @@ jobs:
         shell: pwsh
         run: ./build.ps1
 
-      - name: Publish to VS Code Marketplace
-        working-directory: Source/PiDbg.VsCodeExtension
-        run: npx vsce publish --target win32-x64 -p ${{ secrets.VSCE_PAT }}
-
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release create "${{ github.ref_name }}" dist/*.vsix --title "PiDbg ${{ github.ref_name }}" --generate-notes
+
+      - name: Publish to VS Code Marketplace
+        working-directory: Source/PiDbg.VsCodeExtension
+        run: npx vsce publish --target win32-x64 -p ${{ secrets.VSCE_PAT }}
