@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Sockets;
 using System.Threading;
@@ -30,13 +31,25 @@ public sealed partial class SshConnectionManager : ISshConnectionManager, IDispo
         if (_sessions.TryGetValue(key, out var existing) && existing.Ssh.IsConnected)
             return existing;
 
-        AuthenticationMethod[] authMethods = config.KeyFile != null
-            ? new AuthenticationMethod[]
-              { new PrivateKeyAuthenticationMethod(config.User, new PrivateKeyFile(config.KeyFile)) }
-            : new AuthenticationMethod[]
-              { new PasswordAuthenticationMethod(config.User, config.Password ?? "") };
+        var authMethods = new List<AuthenticationMethod>();
 
-        var connInfo = new ConnectionInfo(config.Host, config.Port, config.User, authMethods);
+        if (config.KeyFile != null && File.Exists(config.KeyFile))
+            authMethods.Add(new PrivateKeyAuthenticationMethod(config.User, new PrivateKeyFile(config.KeyFile)));
+
+        if (!string.IsNullOrEmpty(config.Password))
+            authMethods.Add(new PasswordAuthenticationMethod(config.User, config.Password));
+
+        if (authMethods.Count == 0)
+        {
+            throw new InvalidOperationException(
+                config.KeyFile != null
+                    ? $"SSH private key not found at '{config.KeyFile}' and no password was provided. " +
+                      "Either create a key at that path, set 'privateKeyPath' in launch.json to an existing key, " +
+                      "or add a 'password' field."
+                    : "No SSH authentication method configured. Set 'privateKeyPath' or 'password' in launch.json.");
+        }
+
+        var connInfo = new ConnectionInfo(config.Host, config.Port, config.User, authMethods.ToArray());
         var session  = await ConnectWithRetryAsync(connInfo, config.Host, ct).ConfigureAwait(false);
 
         _sessions[key] = session;

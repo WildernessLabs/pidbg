@@ -56,7 +56,7 @@ export class PiDbgConfigurationProvider implements vscode.DebugConfigurationProv
             config.appName = path.basename(config.projectPath, '.csproj');
         }
 
-        if (!config.host || config.host === DEFAULT_HOST) {
+        if (!config.host) {
             const lastHost = this.context.globalState.get<string>('pidbg.lastHost');
             const host = await vscode.window.showInputBox({
                 title: 'PiDbg: Raspberry Pi hostname or IP',
@@ -68,7 +68,7 @@ export class PiDbgConfigurationProvider implements vscode.DebugConfigurationProv
             config.host = host;
         }
 
-        if (!config.username || config.username === DEFAULT_USERNAME) {
+        if (!config.username) {
             const lastUsername = this.context.globalState.get<string>('pidbg.lastUsername');
             const username = await vscode.window.showInputBox({
                 title: 'PiDbg: SSH username',
@@ -82,8 +82,34 @@ export class PiDbgConfigurationProvider implements vscode.DebugConfigurationProv
 
         await this.context.globalState.update('pidbg.lastHost', config.host);
         await this.context.globalState.update('pidbg.lastUsername', config.username);
+        await this.persistToLaunchJson(folder, config);
 
         return config;
+    }
+
+    private async persistToLaunchJson(
+        folder: vscode.WorkspaceFolder | undefined,
+        config: vscode.DebugConfiguration
+    ): Promise<void> {
+        if (!folder) {
+            return;
+        }
+
+        const launchSection = vscode.workspace.getConfiguration('launch', folder.uri);
+        const configurations = launchSection.get<vscode.DebugConfiguration[]>('configurations') ?? [];
+
+        const index = configurations.findIndex(c =>
+            c.type === 'pidbg' && (c.projectPath === config.projectPath || c.name === config.name)
+        );
+        if (index === -1) {
+            // No launch.json entry yet (e.g. F5 was pressed directly without first
+            // running "Add Configuration") - create one instead of silently skipping.
+            configurations.push(config);
+        } else {
+            configurations[index] = { ...configurations[index], host: config.host, username: config.username };
+        }
+
+        await launchSection.update('configurations', configurations, vscode.ConfigurationTarget.WorkspaceFolder);
     }
 
     private async findCsprojFiles(
@@ -104,8 +130,8 @@ export class PiDbgConfigurationProvider implements vscode.DebugConfigurationProv
             type: 'pidbg',
             request: 'launch',
             name: `Debug ${appName} on Raspberry Pi`,
-            host: DEFAULT_HOST,
-            username: DEFAULT_USERNAME,
+            host: '',
+            username: '',
             privateKeyPath: '${userHome}/.ssh/pidbg_rsa',
             appName: appName,
             projectPath: csprojUri.fsPath,

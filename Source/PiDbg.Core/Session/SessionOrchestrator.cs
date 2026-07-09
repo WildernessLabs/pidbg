@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Meadow.Daemon.Contracts.V1;
@@ -40,7 +41,9 @@ public sealed partial class SessionOrchestrator
         IProgress<string> progress,
         CancellationToken ct)
     {
-        progress.Report($"=== PiDbg: {request.AppName} on {request.Connection.Host} ===");
+        var version = Assembly.GetEntryAssembly()?.GetName().Version;
+        var versionText = version is null ? "" : $" (v{version.Major}.{version.Minor}.{version.Build})";
+        progress.Report($"=== PiDbg{versionText}: {request.AppName} on {request.Connection.Host} ===");
 
         // --- Step 1: SSH ---
         progress.Report("Connecting...");
