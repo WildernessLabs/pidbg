@@ -2,6 +2,9 @@
 
 ## .NET
 bin/
+!Source/PiDbg.VsCodeExtension/bin/
+Source/PiDbg.VsCodeExtension/bin/*
+!Source/PiDbg.VsCodeExtension/bin/.gitkeep
 obj/
 *.user
 *.suo
