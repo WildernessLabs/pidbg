@@ -8,6 +8,27 @@ Debug .NET applications running on a Raspberry Pi directly from VS Code. PiDbg d
 - A Raspberry Pi running **Raspberry Pi OS 64-bit (Debian 12, ARM64)** with **.NET 9** installed.
 - SSH access to the Pi (key-based auth is strongly recommended over password auth).
 
+## Installation
+
+### From the VS Code Marketplace
+
+Open the **Extensions** view in VS Code (`Ctrl+Shift+X`), search for **PiDbg**, and click **Install**. Alternatively, install directly from the command line:
+
+```sh
+code --install-extension wildernessLabs.pidbg
+```
+
+### From a downloaded `.vsix` (GitHub Releases)
+
+Every [tagged release](https://github.com/WildernessLabs/pidbg/releases) publishes a `pidbg-vscode-<version>.vsix` file. Download it, then either:
+
+- Run **Extensions: Install from VSIX...** from the Command Palette and select the downloaded file, or
+- Install it from the command line:
+
+  ```sh
+  code --install-extension pidbg-vscode-<version>.vsix
+  ```
+
 ## Getting started
 
 Add a debug configuration to your `.vscode/launch.json`. Typing `pidbg` in an empty `launch.json` offers a starter snippet:
