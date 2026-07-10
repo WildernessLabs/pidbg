@@ -79,6 +79,7 @@ message StartDebugSessionRequest {
   string      required_version  = 3; // vsdbg version; empty = use installed
   bool        force             = 4; // kill existing session for this app if present
   string      correlation_id    = 5; // 8-char hex from VSIX
+  bool        suspend_on_start  = 6; // start the app suspended (SIGSTOP); caller must ResumeApp
 }
 
 message StartDebugSessionResponse {

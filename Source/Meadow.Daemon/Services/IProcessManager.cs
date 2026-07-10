@@ -4,13 +4,14 @@ namespace Meadow.Daemon.Services;
 
 public interface IProcessManager
 {
-    Task<StartProcessResult> StartAsync(string appName, CancellationToken ct);
+    Task<StartProcessResult> StartAsync(string appName, CancellationToken ct, bool suspendOnStart = false);
     Task StopAsync(string appName, CancellationToken ct);
     Task<StartProcessResult> RestartAsync(string appName, CancellationToken ct);
+    Task<bool> ResumeAsync(string appName, CancellationToken ct);
     AppState GetState(string appName);
     int? GetPid(string appName);
     int? GetExitCode(string appName);
-    IReadOnlyList<string> GetRecentOutput(string appName);
+    IReadOnlyList<OutputLine> GetRecentOutput(string appName);
     ProcessOutputBroadcaster GetOutputBroadcaster(string appName);
     void ReconcileRunningProcess(string appName, int pid);
 }

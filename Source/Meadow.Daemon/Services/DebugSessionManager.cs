@@ -32,13 +32,14 @@ internal class DebugSessionManager : IDebugSessionManager
     }
 
     public async Task<DebugSessionRecord> StartDebugSessionAsync(
-        string appName, SessionMode mode, string correlationId, CancellationToken ct)
+        string appName, SessionMode mode, string correlationId, CancellationToken ct,
+        bool suspendOnStart = false)
     {
         // Ensure app is running (start if not)
         int appPid;
         if (_processManager.GetState(appName) != AppState.Running)
         {
-            var startResult = await _processManager.StartAsync(appName, ct);
+            var startResult = await _processManager.StartAsync(appName, ct, suspendOnStart);
             if (!startResult.Success)
                 throw new InvalidOperationException($"App '{appName}' failed to start: {startResult.Error}");
 
@@ -100,6 +101,9 @@ internal class DebugSessionManager : IDebugSessionManager
             
         return record;
     }
+
+    public Task<bool> ResumeAppAsync(string appName, CancellationToken ct)
+        => _processManager.ResumeAsync(appName, ct);
 
     public async Task StopDebugSessionAsync(string sessionId, CancellationToken ct)
     {
@@ -165,9 +169,15 @@ internal class DebugSessionManager : IDebugSessionManager
             : $"App '{appName}' exited immediately after starting (PID {appPid}, exit code {exitCode}).";
 
         if (output.Count > 0)
-            message += "\nRecent output:\n" + string.Join('\n', output);
+        {
+            var formatted = output.Select(l =>
+                $"[{(l.Stream == OutputStream.Stderr ? "stderr" : "stdout")}] {l.Text}");
+            message += "\nRecent output:\n" + string.Join('\n', formatted);
+        }
         else
+        {
             message += " No output was captured before it exited.";
+        }
 
         return message;
     }

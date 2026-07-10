@@ -72,6 +72,7 @@ try
                 tunnels.CloseAllTunnels();
                 return Task.CompletedTask;
             },
+            onConfigurationDone: () => info.ResumeAsync(cts.Token),
             cts.Token).ConfigureAwait(false);
     }
 }

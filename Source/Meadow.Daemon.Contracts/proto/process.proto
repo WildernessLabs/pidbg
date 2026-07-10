@@ -107,3 +107,14 @@ message StreamOutputRequest {
   string app_name = 1;
   OutputStream stream = 2;
 }
+
+// ─── Resume App ──────────────────────────────────────────────────────────────
+
+message ResumeAppRequest {
+  string app_name = 1;
+}
+
+message ResumeAppResponse {
+  bool   success       = 1;
+  string error_message = 2;
+}

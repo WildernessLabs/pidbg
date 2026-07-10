@@ -122,6 +122,7 @@ internal sealed partial class PiDbgDebugAdapter
             AppName     = Get("appName"),
             ProjectPath = Get("projectPath"),
             DeployRuntimeIfNecessary = GetBool("deployRuntimeIfNecessary"),
+            StopAtEntry = GetBool("stopAtEntry"),
         };
 
         if (string.IsNullOrEmpty(request.Connection.Host) ||
@@ -139,9 +140,13 @@ internal sealed partial class PiDbgDebugAdapter
         var progress = new Progress<string>(line =>
             _ = SendEventAsync("output", new { category = "console", output = line + "\n" }, ct));
 
+        var appOutput = new Progress<(bool IsError, string Text)>(o =>
+            _ = SendEventAsync("output",
+                new { category = o.IsError ? "stderr" : "stdout", output = o.Text + "\n" }, ct));
+
         try
         {
-            var info = await _orchestrator.RunAsync(request, progress, ct).ConfigureAwait(false);
+            var info = await _orchestrator.RunAsync(request, progress, ct, appOutput).ConfigureAwait(false);
             await SendEventAsync("process", new { name = request.AppName, systemProcessId = info.AppPid }, ct)
                 .ConfigureAwait(false);
             return info;

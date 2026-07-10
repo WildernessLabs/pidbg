@@ -98,12 +98,16 @@ internal sealed partial class DapProxy : IDisposable
 
     // Run the proxy loop. Returns when the session ends (disconnect or error).
     // onDisconnect is called before the disconnect message is forwarded to vsdbg.
-    public async Task RunAsync(Func<Task> onDisconnect, CancellationToken ct)
+    // onConfigurationDone (if provided) is called right after VS Code's
+    // configurationDone request is forwarded to vsdbg - e.g. to resume a process
+    // that was started suspended (StopAtEntry), now that breakpoints are set.
+    public async Task RunAsync(
+        Func<Task> onDisconnect, Func<Task>? onConfigurationDone, CancellationToken ct)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
-        var vsCodeToVsdbg = ForwardAsync(_fromVsCode, _toVsdbg, onDisconnect, linked);
-        var vsdbgToVsCode = ForwardAsync(_fromVsdbg, _toVsCode, onTeardown: null, linked);
+        var vsCodeToVsdbg = ForwardAsync(_fromVsCode, _toVsdbg, onDisconnect, onConfigurationDone, linked);
+        var vsdbgToVsCode = ForwardAsync(_fromVsdbg, _toVsCode, onTeardown: null, onConfigurationDone: null, linked);
 
         await Task.WhenAny(vsCodeToVsdbg, vsdbgToVsCode).ConfigureAwait(false);
         linked.Cancel();
@@ -113,6 +117,7 @@ internal sealed partial class DapProxy : IDisposable
     private async Task ForwardAsync(
         DapReader source, DapWriter sink,
         Func<Task>? onTeardown,
+        Func<Task>? onConfigurationDone,
         CancellationTokenSource stopSource)
     {
         try
@@ -134,6 +139,14 @@ internal sealed partial class DapProxy : IDisposable
 
                 if (msg?.Command == "disconnect" || msg?.Command == "terminate")
                     break;
+
+                if (msg?.Command == "configurationDone" && onConfigurationDone != null)
+                {
+                    // Breakpoints (setBreakpoints, sent earlier over this same ordered
+                    // connection) are already queued ahead of configurationDone in
+                    // vsdbg's processing order, so it's safe to resume right away.
+                    try { await onConfigurationDone().ConfigureAwait(false); } catch { /* best effort */ }
+                }
             }
         }
         catch (OperationCanceledException) { /* normal shutdown */ }

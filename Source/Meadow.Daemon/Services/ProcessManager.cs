@@ -37,13 +37,16 @@ internal class ProcessManager : IProcessManager, IDisposable
         public AppState                 State        { get; set; } = AppState.Stopped;
         public int                      RestartCount { get; set; }
         public DateTimeOffset           LastCrashAt  { get; set; }
+        public bool                     Suspended    { get; set; }
 
         // Best-effort ring buffer of recent stdout/stderr lines, kept independent of the
-        // pub/sub Broadcaster so crash output is still available even if nothing was
-        // subscribed to live-stream it at the moment the process failed.
-        public ConcurrentQueue<string> RecentOutput { get; } = new();
+        // pub/sub Broadcaster so crash/startup output is still available to a caller
+        // that only subscribes (StreamOutput, GetRecentOutput) after the app already
+        // produced it - e.g. an error during Initialize(), which happens well before
+        // any client has had a chance to start streaming.
+        public ConcurrentQueue<OutputLine> RecentOutput { get; } = new();
 
-        public void AppendRecentOutput(string line)
+        public void AppendRecentOutput(OutputLine line)
         {
             RecentOutput.Enqueue(line);
             while (RecentOutput.Count > RecentOutputCapacity)
@@ -53,7 +56,7 @@ internal class ProcessManager : IProcessManager, IDisposable
         public void Dispose() => Broadcaster.Dispose();
     }
 
-    public async Task<StartProcessResult> StartAsync(string appName, CancellationToken ct)
+    public async Task<StartProcessResult> StartAsync(string appName, CancellationToken ct, bool suspendOnStart = false)
     {
         var state = await _stateStore.LoadAppsAsync(ct);
         var app = state.Apps.FirstOrDefault(a => a.Name == appName);
@@ -68,6 +71,7 @@ internal class ProcessManager : IProcessManager, IDisposable
 
         managed.State = AppState.Starting;
         managed.RecentOutput.Clear();
+        managed.Suspended = false;
 
         var debugDir = DaemonPaths.AppDebugDir(_options, appName);
         var entryPoint = Path.Combine(debugDir, app.EntryPoint.Replace('/', Path.DirectorySeparatorChar));
@@ -113,13 +117,14 @@ internal class ProcessManager : IProcessManager, IDisposable
             {
                 if (e.Data != null)
                 {
-                    managed.AppendRecentOutput($"[stdout] {e.Data}");
-                    managed.Broadcaster.TryWrite(new OutputLine
+                    var line = new OutputLine
                     {
                         Stream    = OutputStream.Stdout,
                         Text      = e.Data,
                         TimestampMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-                    });
+                    };
+                    managed.AppendRecentOutput(line);
+                    managed.Broadcaster.TryWrite(line);
                 }
             };
 
@@ -127,19 +132,31 @@ internal class ProcessManager : IProcessManager, IDisposable
             {
                 if (e.Data != null)
                 {
-                    managed.AppendRecentOutput($"[stderr] {e.Data}");
-                    managed.Broadcaster.TryWrite(new OutputLine
+                    var line = new OutputLine
                     {
                         Stream    = OutputStream.Stderr,
                         Text      = e.Data,
                         TimestampMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-                    });
+                    };
+                    managed.AppendRecentOutput(line);
+                    managed.Broadcaster.TryWrite(line);
                 }
             };
             
             process.Exited += (_, _) => OnProcessExited(appName, managed);
 
             process.Start();
+
+            // Suspend as close to fork/exec as possible so debugger attach + breakpoint
+            // binding happens before any of the app's own code runs. Not a hard guarantee
+            // (a handful of runtime-startup instructions may execute before the signal is
+            // delivered), but catches user code (Main/Initialize) reliably in practice.
+            if (suspendOnStart && RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                Mono.Unix.Native.Syscall.kill(process.Id, Mono.Unix.Native.Signum.SIGSTOP);
+                managed.Suspended = true;
+            }
+
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
 
@@ -208,6 +225,21 @@ internal class ProcessManager : IProcessManager, IDisposable
         return await StartAsync(appName, ct);
     }
 
+    public Task<bool> ResumeAsync(string appName, CancellationToken ct)
+    {
+        if (!_processes.TryGetValue(appName, out var managed) || managed.Handle == null || managed.Handle.HasExited)
+            return Task.FromResult(false);
+
+        if (!managed.Suspended)
+            return Task.FromResult(true); // not suspended - nothing to do, not an error
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            Mono.Unix.Native.Syscall.kill(managed.Handle.Id, Mono.Unix.Native.Signum.SIGCONT);
+
+        managed.Suspended = false;
+        return Task.FromResult(true);
+    }
+
     public AppState GetState(string appName)
     {
         if (_processes.TryGetValue(appName, out var managed))
@@ -229,11 +261,11 @@ internal class ProcessManager : IProcessManager, IDisposable
         return null;
     }
 
-    public IReadOnlyList<string> GetRecentOutput(string appName)
+    public IReadOnlyList<OutputLine> GetRecentOutput(string appName)
     {
         if (_processes.TryGetValue(appName, out var managed))
             return managed.RecentOutput.ToArray();
-        return Array.Empty<string>();
+        return Array.Empty<OutputLine>();
     }
 
     public ProcessOutputBroadcaster GetOutputBroadcaster(string appName)

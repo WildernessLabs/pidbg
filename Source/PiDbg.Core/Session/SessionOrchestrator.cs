@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Grpc.Core;
 using Meadow.Daemon.Contracts.V1;
 using Microsoft.Extensions.Logging;
 using LogLevel = Microsoft.Extensions.Logging.LogLevel;
@@ -40,7 +41,8 @@ public sealed partial class SessionOrchestrator
     public async Task<DebugSessionInfo> RunAsync(
         SessionRequest    request,
         IProgress<string> progress,
-        CancellationToken ct)
+        CancellationToken ct,
+        IProgress<(bool IsError, string Text)>? appOutput = null)
     {
         var version = Assembly.GetEntryAssembly()?.GetName().Version;
         var versionText = version is null ? "" : $" (v{version.Major}.{version.Minor}.{version.Build})";
@@ -107,15 +109,22 @@ public sealed partial class SessionOrchestrator
         var sessionResp = await grpc.StartDebugSessionAsync(
             new StartDebugSessionRequest
             {
-                AppName       = request.AppName,
-                Mode          = SessionMode.Attach,
-                CorrelationId = Guid.NewGuid().ToString(),
+                AppName        = request.AppName,
+                Mode           = SessionMode.Attach,
+                CorrelationId  = Guid.NewGuid().ToString(),
+                SuspendOnStart = request.StopAtEntry,
             },
             cancellationToken: ct).ConfigureAwait(false);
 
         if (!sessionResp.Success)
             throw new InvalidOperationException(
                 $"Failed to start debug session: {sessionResp.ErrorMessage}");
+
+        // Stream the app's own stdout/stderr (e.g. Resolver.Log output) to the caller
+        // for the rest of the session. Best-effort: runs until ct is cancelled (session
+        // ends) or the daemon stops sending; failures here must not fail the session.
+        if (appOutput is not null)
+            _ = StreamAppOutputAsync(grpc, request.AppName, appOutput, ct);
 
         // --- Step 6: SSH tunnel for vsdbg ---
         var localPort = await _tunnels
@@ -134,10 +143,59 @@ public sealed partial class SessionOrchestrator
             LocalPort  = localPort,
             AppPid     = sessionResp.AppPid,
             AppDllPath = appDllPath,
+            ResumeAsync = resumeCt => ResumeAppAsync(grpc, request.AppName, resumeCt),
         };
+    }
+
+    private async Task ResumeAppAsync(
+        MeadowDaemonService.MeadowDaemonServiceClient grpc, string appName, CancellationToken ct)
+    {
+        try
+        {
+            await grpc.ResumeAppAsync(
+                new ResumeAppRequest { AppName = appName }, cancellationToken: ct)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) { /* session ended */ }
+        catch (RpcException ex)
+        {
+            LogResumeFailed(_logger, ex);
+        }
+    }
+
+    private async Task StreamAppOutputAsync(
+        MeadowDaemonService.MeadowDaemonServiceClient grpc,
+        string appName,
+        IProgress<(bool IsError, string Text)> appOutput,
+        CancellationToken ct)
+    {
+        try
+        {
+            using var call = grpc.StreamOutput(
+                new StreamOutputRequest { AppName = appName, Stream = OutputStream.Combined },
+                cancellationToken: ct);
+
+            while (await call.ResponseStream.MoveNext(ct).ConfigureAwait(false))
+            {
+                var line = call.ResponseStream.Current;
+                appOutput.Report((line.Stream == OutputStream.Stderr, line.Text));
+            }
+        }
+        catch (OperationCanceledException) { /* session ended */ }
+        catch (RpcException) { /* daemon/tunnel went away - not fatal to the debug session */ }
+        catch (Exception ex)
+        {
+            LogOutputStreamFailed(_logger, ex);
+        }
     }
 
     [LoggerMessage(Level = LogLevel.Information,
         Message = "Debug session ready: local port {LocalPort}, PID {Pid}")]
     private static partial void LogSessionReady(ILogger logger, int localPort, int pid);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "App output stream ended")]
+    private static partial void LogOutputStreamFailed(ILogger logger, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to resume suspended app")]
+    private static partial void LogResumeFailed(ILogger logger, Exception ex);
 }

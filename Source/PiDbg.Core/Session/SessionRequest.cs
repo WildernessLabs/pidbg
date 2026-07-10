@@ -9,4 +9,5 @@ public sealed record SessionRequest
     public string              ProjectPath { get; init; } = "";
     public string[]            AppArgs     { get; init; } = System.Array.Empty<string>();
     public bool                DeployRuntimeIfNecessary { get; init; }
+    public bool                StopAtEntry { get; init; }
 }

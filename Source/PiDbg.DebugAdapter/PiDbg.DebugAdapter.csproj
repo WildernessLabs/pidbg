@@ -30,9 +30,11 @@
   <Target Name="PackageDaemon" BeforeTargets="PrepareForBuild">
     <Message Importance="high" Text="Packaging Meadow.Daemon for bundling..." />
     <!-- RemoveProperties prevents this nested publish from inheriting the outer
-         `dotnet publish -o ...` invocation's PublishDir, which would otherwise redirect
-         Meadow.Daemon's output into PiDbg.DebugAdapter's own publish folder. -->
-    <MSBuild Projects="..\Meadow.Daemon\Meadow.Daemon.csproj" Targets="Publish" Properties="Configuration=$(Configuration);RuntimeIdentifier=linux-arm64;PublishSingleFile=true;SelfContained=true" RemoveProperties="PublishDir" />
+         `dotnet publish -o ... -p:Version=...` invocation's global properties, which
+         would otherwise redirect Meadow.Daemon's output into PiDbg.DebugAdapter's own
+         publish folder (PublishDir) and/or overwrite its own <Version> with the VS
+         Code extension's package.json version instead of its own project version. -->
+    <MSBuild Projects="..\Meadow.Daemon\Meadow.Daemon.csproj" Targets="Publish" Properties="Configuration=$(Configuration);RuntimeIdentifier=linux-arm64;PublishSingleFile=true;SelfContained=true" RemoveProperties="PublishDir;Version" />
     <Copy SourceFiles="..\Meadow.Daemon\bin\$(Configuration)\net9.0\linux-arm64\publish\meadow-daemon" DestinationFiles="Resources\meadow-daemon" SkipUnchangedFiles="true" />
   </Target>
 

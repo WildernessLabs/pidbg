@@ -206,10 +206,27 @@ public sealed class MeadowDaemonGrpcService : MeadowDaemonService.MeadowDaemonSe
     {
         LogCall(nameof(StreamOutput), context);
         ValidateAppName(request.AppName);
-        var broadcaster = _processManager.GetOutputBroadcaster(request.AppName);
         var ct = context.CancellationToken;
 
-        await foreach (var line in broadcaster.Subscribe(ct))
+        // Snapshot recent output BEFORE subscribing to live output, so a line can be
+        // missed in the narrow window between the two (rare, best-effort) rather than
+        // ever being replayed twice. By the time a client subscribes, the app's own
+        // startup output - including any early crash - has often already happened and
+        // would otherwise be invisible to a live-only subscriber.
+        var recent = _processManager.GetRecentOutput(request.AppName);
+        var live = _processManager.GetOutputBroadcaster(request.AppName).Subscribe(ct);
+
+        foreach (var line in recent)
+        {
+            if (request.Stream != OutputStream.Combined && line.Stream != request.Stream)
+                continue;
+
+            try { await responseStream.WriteAsync(line, ct); }
+            catch (OperationCanceledException) { return; }
+            catch { return; }
+        }
+
+        await foreach (var line in live)
         {
             if (request.Stream != OutputStream.Combined && line.Stream != request.Stream)
                 continue;
@@ -218,6 +235,14 @@ public sealed class MeadowDaemonGrpcService : MeadowDaemonService.MeadowDaemonSe
             catch (OperationCanceledException) { break; }
             catch { break; }
         }
+    }
+
+    public override async Task<ResumeAppResponse> ResumeApp(ResumeAppRequest request, ServerCallContext context)
+    {
+        LogCall(nameof(ResumeApp), context);
+        ValidateAppName(request.AppName);
+        var success = await _processManager.ResumeAsync(request.AppName, context.CancellationToken);
+        return new ResumeAppResponse { Success = success };
     }
 
     // ── Deployment ─────────────────────────────────────────────────────────────
@@ -432,7 +457,8 @@ public sealed class MeadowDaemonGrpcService : MeadowDaemonService.MeadowDaemonSe
         try
         {
             var session = await _sessionManager.StartDebugSessionAsync(
-                request.AppName, request.Mode, request.CorrelationId, context.CancellationToken);
+                request.AppName, request.Mode, request.CorrelationId, context.CancellationToken,
+                request.SuspendOnStart);
             return new StartDebugSessionResponse
             {
                 Success = true,

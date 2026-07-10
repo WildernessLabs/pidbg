@@ -73,6 +73,10 @@ service MeadowDaemonService {
   // Server-side streaming: emits OutputLines until app exits or client disconnects
   rpc StreamOutput(StreamOutputRequest) returns (stream OutputLine);
 
+  // Resumes an app previously started with suspend_on_start (SIGCONT). Harmless
+  // no-op if the app isn't currently suspended.
+  rpc ResumeApp(ResumeAppRequest) returns (ResumeAppResponse);
+
   // ── Deployment ─────────────────────────────────────────────────────────────
 
   // Step 1: allocate staging area, get version label

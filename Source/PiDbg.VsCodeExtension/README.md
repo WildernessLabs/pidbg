@@ -62,6 +62,7 @@ Press **F5** to build, deploy, and attach.
 | `rootFolder` | Root deployment folder on the Pi (default `~/meadow`) |
 | `args` | Arguments passed to the application |
 | `deployRuntimeIfNecessary` | Automatically install the required .NET runtime on the device if missing (default `false`). If `false` and the device's .NET runtime doesn't match what the project targets, debugging fails with a message naming both versions instead of installing anything. |
+| `stopAtEntry` | Start the app suspended and break before any app code runs, so you can step through startup code (default `false`). |
 
 ### Commands
 

@@ -14,7 +14,7 @@ public enum DaemonInstallAction { None, Install, Upgrade, Reinstall }
 
 internal static class DaemonInstaller
 {
-    public const string RequiredVersion = "1.0.22";
+    public const string RequiredVersion = "1.0.23";
     public const string RequiredSha256  = "";
 
     public static DaemonInstallAction DetermineAction(DetectionResult detection)

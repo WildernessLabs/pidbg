@@ -6,8 +6,11 @@ namespace Meadow.Daemon.Services;
 public interface IDebugSessionManager
 {
     Task<DebugSessionRecord> StartDebugSessionAsync(
-        string appName, SessionMode mode, string correlationId, CancellationToken ct);
-    
+        string appName, SessionMode mode, string correlationId, CancellationToken ct,
+        bool suspendOnStart = false);
+
+    Task<bool> ResumeAppAsync(string appName, CancellationToken ct);
+
     Task StopDebugSessionAsync(string sessionId, CancellationToken ct);
     
     Task<DebugSessionRecord?> GetSessionStatusAsync(string sessionId, CancellationToken ct);
