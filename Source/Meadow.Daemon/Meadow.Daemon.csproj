@@ -5,12 +5,17 @@
     <RootNamespace>Meadow.Daemon</RootNamespace>
     <AssemblyName>meadow-daemon</AssemblyName>
     <OutputType>Exe</OutputType>
-    <Version>1.0.23</Version>
+    <Version>1.0.24</Version>
 
     <!-- Self-contained single-file for linux-arm64 -->
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">linux-arm64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
+    <!-- The deployment pipeline (DaemonInstaller) only ever uploads this one exe to
+         the Pi - there is no mechanism to also deploy loose native dependencies like
+         libMonoPosixHelper.so. Bundle them into the single file (extracted to a temp
+         cache at process startup) so the exe is genuinely self-sufficient. -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <PublishTrimmed>false</PublishTrimmed>
     <TrimmerRootDescriptor>TrimmerRoots.xml</TrimmerRootDescriptor>
     <NoWarn>$(NoWarn);CA1848;IL2026;CA1515</NoWarn>
